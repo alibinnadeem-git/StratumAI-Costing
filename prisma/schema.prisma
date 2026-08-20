@@ -1,0 +1,521 @@
+// Stratum AI Operations Suite — multi-tenant project + estimating schema.
+// One Postgres database is shared by many organizations. Every tenant-owned
+// row carries organizationId, and every server action re-checks the active
+// organization membership before reading or mutating data.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum SystemRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum RfiStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+enum RfiPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum RfqStatus {
+  DRAFT
+  SENT
+  CLOSED
+}
+
+enum RecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  RESPONDED
+}
+
+enum CostSource {
+  NECA
+  REF
+  MANUAL
+  HIST
+  QUOTE
+}
+
+enum EstimateStatus {
+  DRAFT
+  REVIEW
+  SUBMITTED
+  AWARDED
+  LOST
+  ARCHIVED
+}
+
+enum EstimateCondition {
+  NORMAL
+  DIFFICULT
+  VERY_DIFFICULT
+}
+
+enum AdderType {
+  FIXED
+  PERCENT
+}
+
+enum AdderBasis {
+  DIRECT_COST
+  MATERIAL
+  LABOR
+}
+
+enum MarketDirection {
+  INCREASE
+  DECREASE
+}
+
+enum MarketAffects {
+  MATERIAL
+  LABOR
+  ALL
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  memberships   Membership[]
+  projects      Project[]
+  auditLogs     AuditLog[]
+  invites       Invite[]
+  suppliers     Supplier[]
+  costSettings  CostSettings?
+  costItems     CostItem[]
+  estimates     CostEstimate[]
+  jobCosts      JobCostEntry[]
+  supplierQuotes SupplierQuote[]
+  marketFactors MarketFactor[]
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String
+  systemRole   SystemRole @default(USER)
+  createdAt    DateTime   @default(now())
+
+  memberships     Membership[]
+  auditLogs       AuditLog[]
+  rfisCreated     Rfi[]           @relation("RfiCreatedBy")
+  takeoffImports  TakeoffImport[] @relation("TakeoffImportedBy")
+  rfqsCreated     Rfq[]           @relation("RfqCreatedBy")
+  estimatesCreated CostEstimate[] @relation("EstimateCreatedBy")
+  jobCostsCreated JobCostEntry[]  @relation("JobCostCreatedBy")
+  quotesCreated   SupplierQuote[] @relation("SupplierQuoteCreatedBy")
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  email      String
+  role       Role      @default(MEMBER)
+  token      String    @unique @default(cuid())
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Project {
+  id         String    @id @default(cuid())
+  name       String
+  number     String?
+  createdAt  DateTime  @default(now())
+  archivedAt DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  rfis           Rfi[]
+  auditLogs      AuditLog[]
+  takeoffImports TakeoffImport[]
+  rfqs           Rfq[]
+  estimates      CostEstimate[]
+  jobCosts       JobCostEntry[]
+  supplierQuotes SupplierQuote[]
+
+  @@index([organizationId])
+}
+
+model Rfi {
+  id            String      @id @default(cuid())
+  number        Int
+  sheet         String?
+  location      String?
+  subject       String
+  question      String
+  response      String?
+  status        RfiStatus   @default(OPEN)
+  priority      RfiPriority @default(NORMAL)
+  imageDataUrl  String?
+  submittedBy   String?
+  dateSubmitted DateTime?
+  dateNeeded    DateTime?
+  dateAnswered  DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User? @relation("RfiCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String
+  contactName String?
+  email       String
+  phone       String?
+  categories  String[] @default([])
+  createdAt   DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  rfqRecipients RfqRecipient[]
+  quotes        SupplierQuote[]
+
+  @@index([organizationId])
+}
+
+model TakeoffImport {
+  id         String   @id @default(cuid())
+  fileName   String?
+  importedAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  importedById String?
+  importedBy   User? @relation("TakeoffImportedBy", fields: [importedById], references: [id])
+
+  items TakeoffItem[]
+
+  @@index([projectId])
+}
+
+model TakeoffItem {
+  id          String  @id @default(cuid())
+  subject     String
+  count       Int?
+  length      String?
+  area        String?
+  description String?
+  unit        String? @default("EA")
+
+  takeoffImportId String
+  takeoffImport   TakeoffImport @relation(fields: [takeoffImportId], references: [id], onDelete: Cascade)
+
+  rfqLineItems RfqLineItem[]
+
+  @@index([takeoffImportId])
+}
+
+model Rfq {
+  id        String    @id @default(cuid())
+  number    Int
+  title     String
+  status    RfqStatus @default(DRAFT)
+  dueDate   DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User? @relation("RfqCreatedBy", fields: [createdById], references: [id])
+
+  lineItems  RfqLineItem[]
+  recipients RfqRecipient[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+model RfqLineItem {
+  id          String @id @default(cuid())
+  description String
+  quantity    Float
+  unit        String @default("EA")
+  notes       String?
+
+  rfqId String
+  rfq   Rfq @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  takeoffItemId String?
+  takeoffItem   TakeoffItem? @relation(fields: [takeoffItemId], references: [id], onDelete: SetNull)
+
+  @@index([rfqId])
+}
+
+model RfqRecipient {
+  id          String          @id @default(cuid())
+  status      RecipientStatus @default(PENDING)
+  sentAt      DateTime?
+  respondedAt DateTime?
+
+  rfqId      String
+  rfq        Rfq      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([rfqId, supplierId])
+  @@index([rfqId])
+}
+
+// One settings row per tenant. Estimates snapshot these values at creation,
+// so later shop-rate changes do not silently rewrite old bids.
+model CostSettings {
+  id                   String  @id @default(cuid())
+  laborRate            Float   @default(95)
+  overheadPercent      Float   @default(12)
+  profitMarginPercent  Float   @default(15)
+  difficultyMultiplier Float   @default(1)
+  defaultCondition     EstimateCondition @default(NORMAL)
+  updatedAt            DateTime @updatedAt
+
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model CostItem {
+  id                String     @id @default(cuid())
+  category          String
+  description       String
+  unit              String     @default("EA")
+  laborHoursPerUnit Float      @default(0)
+  materialCost      Float      @default(0)
+  source            CostSource @default(MANUAL)
+  notes             String?
+  lastUpdated       DateTime   @updatedAt
+  createdAt         DateTime   @default(now())
+
+  // Optional source-checked NECA data. Values remain in the source unit
+  // shown by necaSourceUnit; the default item laborHoursPerUnit is the
+  // organization's selected working rate for day-to-day estimating.
+  necaSourcePage    Int?
+  necaSourceUnit    String?
+  necaNormal        Float?
+  necaDifficult     Float?
+  necaVeryDifficult Float?
+  necaVerified      Boolean    @default(false)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  estimateLines  EstimateLineItem[]
+  jobCosts       JobCostEntry[]
+  supplierQuotes SupplierQuote[]
+
+  @@index([organizationId, category])
+  @@index([organizationId, description])
+}
+
+model CostEstimate {
+  id                   String            @id @default(cuid())
+  number               Int
+  name                 String
+  status               EstimateStatus    @default(DRAFT)
+  condition            EstimateCondition @default(NORMAL)
+  laborRate            Float
+  overheadPercent      Float
+  profitMarginPercent  Float
+  difficultyMultiplier Float             @default(1)
+  notes                String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User? @relation("EstimateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  lineItems EstimateLineItem[]
+  adders    EstimateAdder[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([projectId])
+}
+
+model EstimateLineItem {
+  id          String @id @default(cuid())
+  description String
+  category    String?
+  quantity    Float  @default(1)
+  unit        String @default("EA")
+  materialCost Float @default(0)
+  laborHoursPerUnit Float @default(0)
+  laborNormal        Float?
+  laborDifficult     Float?
+  laborVeryDifficult Float?
+  notes               String?
+  sortOrder           Int    @default(0)
+
+  estimateId String
+  estimate   CostEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  costItemId String?
+  costItem   CostItem? @relation(fields: [costItemId], references: [id], onDelete: SetNull)
+
+  @@index([estimateId])
+}
+
+model EstimateAdder {
+  id        String     @id @default(cuid())
+  name      String
+  type      AdderType  @default(PERCENT)
+  appliesTo AdderBasis @default(DIRECT_COST)
+  amount    Float      @default(0)
+
+  estimateId String
+  estimate   CostEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@index([estimateId])
+}
+
+model JobCostEntry {
+  id                 String   @id @default(cuid())
+  jobName            String
+  quantity           Float    @default(1)
+  actualLaborHours   Float    @default(0)
+  actualMaterialCost Float    @default(0)
+  date               DateTime @default(now())
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  costItemId String?
+  costItem   CostItem? @relation(fields: [costItemId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User? @relation("JobCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, date])
+}
+
+model SupplierQuote {
+  id               String   @id @default(cuid())
+  description      String
+  quantity         Float    @default(1)
+  unit             String   @default("EA")
+  unitMaterialCost Float    @default(0)
+  quoteDate        DateTime @default(now())
+  validUntil       DateTime?
+  reference        String?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  costItemId String?
+  costItem   CostItem? @relation(fields: [costItemId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User? @relation("SupplierQuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, quoteDate])
+}
+
+model MarketFactor {
+  id          String          @id @default(cuid())
+  category    String
+  description String
+  direction   MarketDirection
+  magnitude   Float
+  affects     MarketAffects
+  source      String?
+  url         String?
+  asOf        DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+}
