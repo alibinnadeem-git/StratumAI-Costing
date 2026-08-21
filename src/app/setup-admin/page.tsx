@@ -43,7 +43,7 @@ export default async function SetupAdminPage() {
         data: {
           userId: user.id,
           organizationId: org.id,
-          role: "ADMIN",
+          role: "OWNER",
         },
       });
     });
