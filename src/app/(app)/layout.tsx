@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { requireOrgContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
+import JarvisCopilot from "@/components/JarvisCopilot";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
 
@@ -132,6 +133,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="stratum-main">{children}</main>
+
+      <JarvisCopilot organizationId={ctx.organization.id} organizationName={ctx.organization.name} />
 
       <footer className="stratum-titleblock">
         <span>DWG <b>SC-EST-001</b></span>
