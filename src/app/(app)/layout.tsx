@@ -1,16 +1,40 @@
 import Link from "next/link";
-import { Building2, Calculator, FolderKanban, LayoutDashboard, ShieldCheck, Truck, Zap } from "lucide-react";
+import {
+  BarChart3,
+  BookOpenCheck,
+  Boxes,
+  Building2,
+  ClipboardList,
+  FileQuestion,
+  FolderKanban,
+  Gauge,
+  ReceiptText,
+  Settings2,
+  ShieldCheck,
+  ShoppingCart,
+  Truck,
+} from "lucide-react";
 import { requireOrgContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/costing", label: "Costing", icon: Calculator },
+const CORE_NAV = [
+  { href: "/costing/items", label: "Item Database", icon: Boxes },
+  { href: "/costing/estimates", label: "Estimate Builder", icon: ReceiptText },
+  { href: "/costing/job-costs", label: "Job Cost History", icon: ClipboardList },
+  { href: "/costing/quotes", label: "Supplier Quotes", icon: ShoppingCart },
+  { href: "/costing", label: "Analytics", icon: BarChart3 },
+  { href: "/costing/market", label: "Market Intel", icon: Gauge },
+  { href: "/costing/neca", label: "NECA Labor", icon: BookOpenCheck },
+  { href: "/costing/settings", label: "Settings", icon: Settings2 },
+];
+
+const OPERATIONS_NAV = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
-  { href: "/organizations", label: "Organizations", icon: Building2 },
+  { href: "/projects", label: "RFIs", icon: FileQuestion },
+  { href: "/projects", label: "RFQs", icon: ShoppingCart },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -18,33 +42,108 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const isAdmin = atLeast(ctx.role, "ADMIN");
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="relative overflow-hidden border-b border-graphite-700/60 bg-graphite-950 text-white">
-        <div className="bp-grid-dark pointer-events-none absolute inset-0 opacity-60" />
-        <div className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div className="flex min-w-0 items-center gap-5">
-            <Link href="/dashboard" className="group flex shrink-0 items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-signal-400/30 bg-signal-500/10 text-signal-300 shadow-glow transition-transform group-hover:scale-105">
-                <Zap className="h-4 w-4" strokeWidth={2.25} />
+    <div className="stratum-workspace">
+      <header className="stratum-shell sticky top-0 z-40">
+        <div className="mx-auto flex max-w-[1280px] flex-wrap items-end justify-between gap-4 px-4 pb-3 pt-5 sm:px-7">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/costing/items" className="group flex min-w-0 items-center gap-4">
+              <span className="stratum-brand-mark"><span className="relative z-10 text-sm">S</span></span>
+              <span className="min-w-0">
+                <span className="block truncate text-[18px] font-bold uppercase tracking-[0.04em] text-[#DCEBF5]">Stratum AI Costing Tool</span>
+                <span className="mt-0.5 block truncate font-mono text-[10px] uppercase tracking-[0.06em] text-[#6D8AA0]">
+                  Item Database · Takeoff · Supplier Quotes · Job-Cost Calibration
+                </span>
               </span>
-              <span className="hidden sm:block"><span className="block text-sm font-semibold tracking-tight">Stratum AI</span><span className="block text-[9px] uppercase tracking-[0.16em] text-slate-500">Costing + Project Operations</span></span>
             </Link>
-            <nav className="hidden gap-1 lg:flex">
-              {NAV.map((item) => { const Icon=item.icon; return <Link key={item.href} href={item.href} className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"><Icon className="h-3.5 w-3.5" />{item.label}</Link>; })}
-              {isAdmin && <Link href="/admin" className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-white/5 hover:text-white"><ShieldCheck className="h-3.5 w-3.5" />Admin</Link>}
-            </nav>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {ctx.memberships.length > 1 ? <OrgSwitcher current={ctx.organization.id} options={ctx.memberships.map((m)=>({id:m.organizationId,name:m.organization.name}))}/> : <span className="max-w-[180px] truncate text-xs font-medium text-slate-300">{ctx.organization.name}</span>}
-            <span className="rounded-full border border-graphite-600 bg-graphite-800 px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wide text-slate-300">{ctx.role}</span>
-            {ctx.user.systemRole === "SUPER_ADMIN" && <span className="hidden rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[9px] font-bold text-amber-300 sm:inline">PLATFORM</span>}
-            <form action={signOutAction}><button className="text-xs font-medium text-slate-400 transition-colors hover:text-white">Sign out</button></form>
+          <div className="flex flex-wrap items-end justify-end gap-3">
+            {ctx.memberships.length > 1 ? (
+              <OrgSwitcher
+                current={ctx.organization.id}
+                options={ctx.memberships.map((m) => ({ id: m.organizationId, name: m.organization.name }))}
+              />
+            ) : (
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="stratum-context-label">Organization</span>
+                <span className="max-w-[220px] truncate font-mono text-[11px] text-[#DCEBF5]">{ctx.organization.name}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1">
+              <span className="stratum-context-label">Access</span>
+              <span className="stratum-role">{ctx.role}</span>
+            </div>
+
+            {ctx.user.systemRole === "SUPER_ADMIN" && (
+              <div className="flex flex-col gap-1">
+                <span className="stratum-context-label">Platform</span>
+                <span className="stratum-role border-[#E8B339] !text-[#E8B339]">SUPER ADMIN</span>
+              </div>
+            )}
+
+            <form action={signOutAction} className="pb-0.5">
+              <button className="border border-[#1C3A57] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9FB6C7] transition hover:border-[#C97C3D] hover:text-[#E0954F]">
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
-        <div className="relative overflow-x-auto border-t border-white/5 lg:hidden"><nav className="mx-auto flex min-w-max max-w-7xl gap-1 px-4 py-1.5">{NAV.map((item)=>{const Icon=item.icon;return <Link key={item.href} href={item.href} className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-slate-300"><Icon className="h-3.5 w-3.5"/>{item.label}</Link>})}{isAdmin&&<Link href="/admin" className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-slate-300"><ShieldCheck className="h-3.5 w-3.5"/>Admin</Link>}</nav></div>
-      </div>
-      <div className="mx-auto max-w-7xl px-5 py-6">{children}</div>
+
+        <div className="stratum-tabs overflow-x-auto">
+          <nav className="mx-auto flex min-w-max max-w-[1280px] items-center px-3 sm:px-7" aria-label="Costing workspace">
+            {CORE_NAV.map((item, index) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.href + item.label} href={item.href} className="stratum-tab">
+                  <span className="stratum-tab-index">{String(index + 1).padStart(2, "0")}</span>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="overflow-x-auto border-b border-[#1C3A57] bg-[#0A1A2B]/95">
+          <nav className="mx-auto flex min-w-max max-w-[1280px] items-center px-3 sm:px-7" aria-label="Project operations">
+            <span className="mr-2 font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">Operations</span>
+            {OPERATIONS_NAV.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link key={item.label} href={item.href} className="stratum-tab !py-2">
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link href="/organizations" className="stratum-tab !py-2">
+              <Building2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Organizations
+            </Link>
+            {isAdmin && (
+              <Link href="/admin" className="stratum-tab !py-2">
+                <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Admin
+              </Link>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      <main className="stratum-main">{children}</main>
+
+      <footer className="stratum-titleblock">
+        <span>DWG <b>SC-EST-001</b></span>
+        <span className="divider">|</span>
+        <span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span>
+        <span className="divider">|</span>
+        <span>WORKSPACE <b>SERVER-BACKED</b></span>
+        <span className="divider">|</span>
+        <span>RBAC <b>{ctx.role}</b></span>
+        <span className="divider">|</span>
+        <span>REV <b>ENTERPRISE MERGE</b></span>
+      </footer>
     </div>
   );
 }
