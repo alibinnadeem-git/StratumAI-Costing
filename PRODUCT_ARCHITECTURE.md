@@ -95,7 +95,7 @@ Every sensitive mutation must record actor, account/tenant, organization, projec
 
 ## Jarvis AI Copilot
 
-Jarvis is an application-aware operating copilot rather than a generic chat box.
+Jarvis is an application-aware operating copilot rather than a generic chat box. This implementation is independent of any separate/original Jarvis system and has no dependency on it unless an explicit integration is added later.
 
 ### Context Jarvis should understand
 
@@ -168,3 +168,7 @@ Better Next Estimate
 ```
 
 The software adds value by reducing manual re-entry, exposing commercial risk earlier, connecting project information to money and labor, preserving organizational knowledge, improving estimate quality, shortening RFQ/RFI cycles and making historical performance useful in future decisions.
+
+## Production migration status
+
+The Neon production database now implements the Organization → Account/Tenant hierarchy. Existing Organization data was backfilled into a `Main Account`, existing organization memberships were copied to AccountMembership records, and all existing tenant-owned rows in the migrated domains were assigned to that account without orphaned data. Application code is being promoted through the `feature/account-tenant-jarvis` branch with account-scoped server checks before production rollout.
