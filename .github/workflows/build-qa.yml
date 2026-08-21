@@ -3,6 +3,8 @@ name: Build QA
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -46,7 +48,7 @@ jobs:
           npm run build 2>&1 | tee build.log
 
       - name: Publish build QA result
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
