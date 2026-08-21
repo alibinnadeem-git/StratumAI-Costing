@@ -1,13 +1,34 @@
-import { requireOrgContext } from "@/lib/session";
+import { requireTenantContext } from "@/lib/session";
 import { db } from "@/lib/db";
 import { atLeast } from "@/lib/rbac";
-import { Card, PageHeader } from "@/components/ui";
 import { saveCostSettingsAction } from "../actions";
 
-export default async function CostingSettingsPage(){
-  const ctx=await requireOrgContext(); const settings=await db.costSettings.findUnique({where:{organizationId:ctx.organization.id}}); const canManage=atLeast(ctx.role,"ADMIN");
-  return <div className="space-y-5 max-w-4xl"><PageHeader eyebrow={ctx.organization.name} title="Costing Settings" subtitle="Shop-wide defaults for this organization only. Existing estimates keep their own snapshots." />
-    <Card className="p-5"><form action={saveCostSettingsAction} className="grid gap-4 sm:grid-cols-2"><label><span className="mb-1 block text-xs font-semibold text-slate-500">Labor rate ($/hr)</span><input name="laborRate" type="number" step="0.01" defaultValue={settings?.laborRate??95} disabled={!canManage} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"/></label><label><span className="mb-1 block text-xs font-semibold text-slate-500">Overhead (%)</span><input name="overheadPercent" type="number" step="0.1" defaultValue={settings?.overheadPercent??12} disabled={!canManage} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"/></label><label><span className="mb-1 block text-xs font-semibold text-slate-500">Profit margin (%)</span><input name="profitMarginPercent" type="number" step="0.1" defaultValue={settings?.profitMarginPercent??15} disabled={!canManage} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"/></label><label><span className="mb-1 block text-xs font-semibold text-slate-500">Difficulty multiplier</span><input name="difficultyMultiplier" type="number" step="0.05" defaultValue={settings?.difficultyMultiplier??1} disabled={!canManage} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"/></label><label className="sm:col-span-2"><span className="mb-1 block text-xs font-semibold text-slate-500">Default NECA / install condition</span><select name="defaultCondition" defaultValue={settings?.defaultCondition??"NORMAL"} disabled={!canManage} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-50"><option>NORMAL</option><option>DIFFICULT</option><option>VERY_DIFFICULT</option></select></label>{canManage&&<button className="justify-self-start rounded-md bg-signal-600 px-4 py-2 text-xs font-semibold text-white">Save organization defaults</button>}</form></Card>
-    {!canManage&&<Card className="p-4 text-sm text-slate-500">Your {ctx.role} role can view these settings but only organization Admins and Owners can change the shared cost basis.</Card>}
-  </div>;
+export default async function CostingSettingsPage() {
+  const ctx = await requireTenantContext();
+  const settings = await db.costSettings.findUnique({ where: { accountId: ctx.account.id } });
+  const canManage = atLeast(ctx.accountRole, "ADMIN");
+
+  return (
+    <div className="max-w-4xl space-y-5">
+      <section className="stratum-sheet">
+        <h1 className="stratum-sheet-title">Costing Settings</h1>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[#6D8AA0]">
+          {ctx.organization.name} · {ctx.account.name} · account-specific estimating defaults
+        </p>
+      </section>
+
+      <section className="stratum-sheet">
+        <form action={saveCostSettingsAction} className="grid gap-4 sm:grid-cols-2">
+          <label>Labor rate ($/hr)<input name="laborRate" type="number" step="0.01" defaultValue={settings?.laborRate ?? 95} disabled={!canManage} /></label>
+          <label>Overhead (%)<input name="overheadPercent" type="number" step="0.1" defaultValue={settings?.overheadPercent ?? 12} disabled={!canManage} /></label>
+          <label>Profit margin (%)<input name="profitMarginPercent" type="number" step="0.1" defaultValue={settings?.profitMarginPercent ?? 15} disabled={!canManage} /></label>
+          <label>Difficulty multiplier<input name="difficultyMultiplier" type="number" step="0.05" defaultValue={settings?.difficultyMultiplier ?? 1} disabled={!canManage} /></label>
+          <label className="sm:col-span-2">Default NECA / install condition<select name="defaultCondition" defaultValue={settings?.defaultCondition ?? "NORMAL"} disabled={!canManage}><option>NORMAL</option><option>DIFFICULT</option><option>VERY_DIFFICULT</option></select></label>
+          {canManage && <button className="btn justify-self-start">Save account defaults</button>}
+        </form>
+      </section>
+
+      {!canManage && <section className="stratum-sheet font-mono text-[11px] text-[#9FB6C7]">Your {ctx.accountRole} account role can view these settings. Account Admins and Owners can change the shared cost basis.</section>}
+    </div>
+  );
 }
