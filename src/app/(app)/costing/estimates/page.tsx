@@ -1,16 +1,22 @@
 import Link from "next/link";
-import { requireOrgContext } from "@/lib/session";
+import { requireTenantContext } from "@/lib/session";
 import { db } from "@/lib/db";
 import { calculateEstimate, money } from "@/lib/costing";
-import { Card, PageHeader } from "@/components/ui";
 
 export default async function EstimatesPage() {
-  const ctx = await requireOrgContext();
-  const estimates = await db.costEstimate.findMany({ where: { organizationId: ctx.organization.id }, include: { lineItems: true, adders: true, project: true, createdBy: { select: { name:true,email:true } } }, orderBy: { updatedAt: "desc" }, take: 250 });
+  const ctx = await requireTenantContext();
+  const estimates = await db.costEstimate.findMany({
+    where: { accountId: ctx.account.id },
+    include: { lineItems: true, adders: true, project: true, createdBy: { select: { name: true, email: true } } },
+    orderBy: { updatedAt: "desc" },
+    take: 250,
+  });
+
   return <div className="space-y-5">
-    <PageHeader eyebrow={ctx.organization.name} title="Estimates" subtitle="Every estimate is tenant-scoped and snapshots its rates, labor settings and line-item values." actions={<Link href="/costing/estimates/new" className="rounded-lg bg-signal-600 px-3.5 py-2 text-xs font-semibold text-white">New estimate</Link>} />
-    <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="min-w-[800px] w-full text-left text-sm"><thead><tr className="border-b bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><th className="px-4 py-2.5">Estimate</th><th className="px-4 py-2.5">Project</th><th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Condition</th><th className="px-4 py-2.5">Updated</th><th className="px-4 py-2.5 text-right">Price</th></tr></thead><tbody>{estimates.map(e=>{
-      const total=calculateEstimate({lines:e.lineItems,adders:e.adders,laborRate:e.laborRate,overheadPercent:e.overheadPercent,profitMarginPercent:e.profitMarginPercent,difficultyMultiplier:e.difficultyMultiplier,condition:e.condition}).total;
-      return <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50"><td className="px-4 py-3"><Link href={`/costing/estimates/${e.id}`} className="font-semibold text-slate-800 hover:text-signal-600">EST-{String(e.number).padStart(4,"0")} · {e.name}</Link><div className="text-xs text-slate-400">{e.lineItems.length} line{e.lineItems.length===1?"":"s"} · {e.createdBy?.name||e.createdBy?.email||"—"}</div></td><td className="px-4 py-3 text-slate-500">{e.project?.name||"—"}</td><td className="px-4 py-3 text-xs font-semibold text-slate-500">{e.status}</td><td className="px-4 py-3 text-xs text-slate-500">{e.condition.replaceAll("_"," ")}</td><td className="px-4 py-3 text-xs text-slate-400">{e.updatedAt.toLocaleDateString()}</td><td className="px-4 py-3 text-right font-mono font-semibold">{money(total)}</td></tr>})}</tbody></table></div>{estimates.length===0&&<div className="p-10 text-center text-sm text-slate-400">No estimates created yet.</div>}</Card>
+    <section className="stratum-sheet"><div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="stratum-sheet-title">Estimate Builder</h1><p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[#6D8AA0]">{ctx.organization.name} · {ctx.account.name} · account-scoped estimating</p></div><Link href="/costing/estimates/new" className="btn">New estimate</Link></div></section>
+    <section className="stratum-sheet"><div className="table-scroll"><table className="min-w-[800px]"><thead><tr><th>Estimate</th><th>Project</th><th>Status</th><th>Condition</th><th>Updated</th><th className="num">Price</th></tr></thead><tbody>{estimates.map((estimate) => {
+      const total = calculateEstimate({ lines: estimate.lineItems, adders: estimate.adders, laborRate: estimate.laborRate, overheadPercent: estimate.overheadPercent, profitMarginPercent: estimate.profitMarginPercent, difficultyMultiplier: estimate.difficultyMultiplier, condition: estimate.condition }).total;
+      return <tr key={estimate.id}><td className="desc-cell"><Link href={`/costing/estimates/${estimate.id}`} className="text-[#DCEBF5] hover:text-[#E0954F]">EST-{String(estimate.number).padStart(4, "0")} · {estimate.name}</Link><span className="cat">{estimate.lineItems.length} line{estimate.lineItems.length === 1 ? "" : "s"} · {estimate.createdBy?.name || estimate.createdBy?.email || "—"}</span></td><td>{estimate.project?.name || "—"}</td><td><span className="tag REF">{estimate.status}</span></td><td>{estimate.condition.replaceAll("_", " ")}</td><td>{estimate.updatedAt.toISOString().slice(0, 10)}</td><td className="num text-[#6FD6C9]">{money(total)}</td></tr>;
+    })}</tbody></table></div>{estimates.length === 0 && <div className="empty-state mt-3">No estimates in this account yet.</div>}</section>
   </div>;
 }
