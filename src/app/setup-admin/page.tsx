@@ -46,6 +46,12 @@ export default async function SetupAdminPage() {
           role: "OWNER",
         },
       });
+
+      await tx.costSettings.upsert({
+        where: { organizationId: org.id },
+        update: {},
+        create: { organizationId: org.id },
+      });
     });
 
     redirect("/login");

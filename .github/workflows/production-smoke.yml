@@ -1,0 +1,50 @@
+name: Production Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait for production deployment and verify health
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://stratum-ai-costing.vercel.app"
+
+          echo "Waiting for the production deployment to become healthy..."
+          healthy=0
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' "$base/api/health" || true)
+            echo "health attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ] && grep -q '"ok":true' /tmp/health.json; then
+              healthy=1
+              break
+            fi
+            sleep 10
+          done
+
+          if [ "$healthy" != "1" ]; then
+            echo "Production health check never became healthy."
+            cat /tmp/health.json || true
+            exit 1
+          fi
+
+          login_code=$(curl -sS -o /tmp/login.html -w '%{http_code}' "$base/login")
+          echo "login -> HTTP $login_code"
+          test "$login_code" = "200"
+          grep -q "Stratum AI" /tmp/login.html
+
+          root_code=$(curl -sS -L -o /tmp/root.html -w '%{http_code}' "$base/")
+          echo "root (follow redirects) -> HTTP $root_code"
+          test "$root_code" = "200"
+          grep -q "Stratum AI" /tmp/root.html
+
+          echo "Production smoke checks passed."
