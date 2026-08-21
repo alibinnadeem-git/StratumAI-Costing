@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useActionState, useState } from "react";
-import { Zap } from "lucide-react";
+import { Eye, EyeOff, Zap } from "lucide-react";
 import { loginAction, registerOrgAction } from "./actions";
 import { useSearchParams } from "next/navigation";
 
@@ -40,8 +40,8 @@ function LoginForm() {
         {mode === "login" ? (
           <form action={loginFormAction} className="space-y-3">
             <input type="hidden" name="next" value={next} />
-            <Field name="email" label="Email" type="email" />
-            <Field name="password" label="Password" type="password" />
+            <Field name="email" label="Email" type="email" autoComplete="email" />
+            <Field name="password" label="Password" type="password" autoComplete="current-password" />
             {loginState?.error && <p className="text-xs font-medium text-rose-400">{loginState.error}</p>}
             <button
               disabled={loginPending}
@@ -52,10 +52,10 @@ function LoginForm() {
           </form>
         ) : (
           <form action={registerFormAction} className="space-y-3">
-            <Field name="orgName" label="Organization name" />
-            <Field name="name" label="Your name" />
-            <Field name="email" label="Email" type="email" />
-            <Field name="password" label="Password" type="password" />
+            <Field name="orgName" label="Organization name" autoComplete="organization" />
+            <Field name="name" label="Your name" autoComplete="name" />
+            <Field name="email" label="Email" type="email" autoComplete="email" />
+            <Field name="password" label="Password" type="password" autoComplete="new-password" />
             {registerState?.error && <p className="text-xs font-medium text-rose-400">{registerState.error}</p>}
             <button
               disabled={registerPending}
@@ -77,16 +77,44 @@ function LoginForm() {
   );
 }
 
-function Field({ name, label, type = "text" }: { name: string; label: string; type?: string }) {
+function Field({
+  name,
+  label,
+  type = "text",
+  autoComplete,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  autoComplete?: string;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const resolvedType = isPassword && showPassword ? "text" : type;
+
   return (
     <label className="block">
       <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
-      <input
-        name={name}
-        type={type}
-        required
-        className="w-full rounded-lg border border-graphite-600 bg-graphite-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 transition-colors focus:border-signal-500 focus:outline-none focus:ring-2 focus:ring-signal-500/20"
-      />
+      <div className="relative">
+        <input
+          name={name}
+          type={resolvedType}
+          autoComplete={autoComplete}
+          required
+          className={`w-full rounded-lg border border-graphite-600 bg-graphite-800 px-3 py-2 text-sm text-white placeholder:text-slate-500 transition-colors focus:border-signal-500 focus:outline-none focus:ring-2 focus:ring-signal-500/20 ${isPassword ? "pr-10" : ""}`}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal-500"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        )}
+      </div>
     </label>
   );
 }
