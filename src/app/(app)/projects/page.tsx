@@ -1,52 +1,76 @@
 import Link from "next/link";
-import { requireOrgContext } from "@/lib/session";
+import { requireTenantContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
 import { db } from "@/lib/db";
 import { createProjectAction } from "./actions";
 
 export default async function ProjectsPage() {
-  const ctx = await requireOrgContext();
-  const canCreate = atLeast(ctx.role, "ADMIN");
+  const ctx = await requireTenantContext();
+  const canCreate = atLeast(ctx.accountRole, "ADMIN");
 
   const projects = await db.project.findMany({
-    where: { organizationId: ctx.organization.id, archivedAt: null },
-    include: { _count: { select: { rfis: true } } },
+    where: { accountId: ctx.account.id, archivedAt: null },
+    include: { _count: { select: { rfis: true, rfqs: true, estimates: true } } },
     orderBy: { createdAt: "desc" },
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-slate-800">Projects</h1>
-      </div>
+    <div className="space-y-5">
+      <section className="stratum-sheet">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="stratum-sheet-title">Projects</h1>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[#6D8AA0]">
+              {ctx.organization.name} · {ctx.account.name} · account-scoped project operations
+            </p>
+          </div>
+          <span className="border border-[#1C3A57] px-2 py-1 font-mono text-[10px] text-[#6FD6C9]">{projects.length} ACTIVE</span>
+        </div>
 
-      {canCreate && (
-        <form action={createProjectAction} className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200/80 bg-white shadow-card p-4">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project name</span>
-            <input name="name" required placeholder="Terawatt — Fremont Hub" className="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project #</span>
-            <input name="number" placeholder="24-118" className="w-32 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-          </label>
-          <button className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-blue-700 hover:shadow-glow active:scale-[0.98]">+ Create project</button>
-        </form>
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {projects.map((p) => (
-          <Link key={p.id} href={`/projects/${p.id}`} className="rounded-xl border border-slate-200/80 bg-white shadow-card px-4 py-3 hover:border-blue-300 hover:shadow-sm">
-            <div className="font-medium text-slate-800">{p.name}</div>
-            <div className="text-xs text-slate-400">{p.number ? `#${p.number} · ` : ""}{p._count.rfis} RFI{p._count.rfis === 1 ? "" : "s"}</div>
-          </Link>
-        ))}
-        {projects.length === 0 && (
-          <p className="col-span-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-            No projects yet.
-          </p>
+        {canCreate && (
+          <form action={createProjectAction} className="grid gap-3 border-t border-[#1C3A57] pt-4 md:grid-cols-[1fr_180px_auto] md:items-end">
+            <label>
+              Project name
+              <input name="name" required placeholder="Terawatt — Fremont Hub" />
+            </label>
+            <label>
+              Project #
+              <input name="number" placeholder="24-118" />
+            </label>
+            <button className="btn h-[35px]">+ Create project</button>
+          </form>
         )}
-      </div>
+      </section>
+
+      <section className="stratum-sheet">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Number</th>
+                <th className="num">RFIs</th>
+                <th className="num">RFQs</th>
+                <th className="num">Estimates</th>
+                <th>Opened</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((project) => (
+                <tr key={project.id}>
+                  <td><Link href={`/projects/${project.id}`} className="text-[#DCEBF5] hover:text-[#E0954F]">{project.name}</Link></td>
+                  <td className="text-[#9FB6C7]">{project.number || "—"}</td>
+                  <td className="num text-[#6FD6C9]">{project._count.rfis}</td>
+                  <td className="num text-[#6FD6C9]">{project._count.rfqs}</td>
+                  <td className="num text-[#6FD6C9]">{project._count.estimates}</td>
+                  <td className="text-[#6D8AA0]">{project.createdAt.toISOString().slice(0, 10)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {projects.length === 0 && <div className="empty-state mt-3">No projects in this account yet.</div>}
+      </section>
     </div>
   );
 }
