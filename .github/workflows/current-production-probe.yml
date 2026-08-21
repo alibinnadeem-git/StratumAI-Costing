@@ -1,0 +1,38 @@
+name: Current Production Probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe production root and login
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://stratum-ai-costing.vercel.app"
+
+          echo "=== LOGIN ==="
+          curl -sS -D /tmp/login.headers -o /tmp/login.html "$base/login" || true
+          cat /tmp/login.headers || true
+          head -c 500 /tmp/login.html || true
+          echo
+
+          echo "=== ROOT ==="
+          curl -sS -L -D /tmp/root.headers -o /tmp/root.html "$base/" || true
+          cat /tmp/root.headers || true
+          head -c 800 /tmp/root.html || true
+          echo
+
+          login_code=$(curl -sS -o /dev/null -w '%{http_code}' "$base/login" || true)
+          root_code=$(curl -sS -L -o /dev/null -w '%{http_code}' "$base/" || true)
+          echo "login_code=$login_code root_code=$root_code"
+
+          test "$login_code" = "200"
+          test "$root_code" = "200"
