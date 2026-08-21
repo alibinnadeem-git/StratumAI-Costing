@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { bootstrapOrganization } from "@/lib/tenant-bootstrap";
 
 export const dynamic = "force-dynamic";
 
@@ -31,26 +32,18 @@ export default async function SetupAdminPage() {
 
       const passwordHash = await bcrypt.hash(password, 12);
       const user = await tx.user.create({
-        data: {
-          email,
-          name,
-          passwordHash,
-          systemRole: "SUPER_ADMIN",
-        },
+        data: { email, name, passwordHash, systemRole: "SUPER_ADMIN" },
       });
 
       await tx.membership.create({
-        data: {
-          userId: user.id,
-          organizationId: org.id,
-          role: "OWNER",
-        },
+        data: { userId: user.id, organizationId: org.id, role: "OWNER" },
       });
 
-      await tx.costSettings.upsert({
-        where: { organizationId: org.id },
-        update: {},
-        create: { organizationId: org.id },
+      const account = await bootstrapOrganization(tx, org.id);
+      await tx.accountMembership.upsert({
+        where: { userId_accountId: { userId: user.id, accountId: account.id } },
+        update: { role: "OWNER" },
+        create: { userId: user.id, accountId: account.id, role: "OWNER" },
       });
     });
 
@@ -63,27 +56,14 @@ export default async function SetupAdminPage() {
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-400">Stratum AI Costing</p>
           <h1 className="mt-3 text-3xl font-semibold">Create first administrator</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-300">
-            This one-time setup is available only while no application users exist. After the first administrator is created, this page disables itself automatically.
-          </p>
+          <p className="mt-3 text-sm leading-6 text-slate-300">This one-time setup creates the first platform administrator, Stratum Electric organization, and its Main Account tenant. After creation, this page disables itself automatically.</p>
         </div>
 
         <form action={createFirstAdmin} className="space-y-5">
-          <label className="block">
-            <span className="mb-2 block text-sm text-slate-300">Name</span>
-            <input name="name" defaultValue="Ali Bin Nadeem" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm text-slate-300">Email</span>
-            <input name="email" type="email" required className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm text-slate-300">Password</span>
-            <input name="password" type="password" minLength={12} required className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" />
-          </label>
-          <button type="submit" className="w-full rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300">
-            Create administrator
-          </button>
+          <label className="block"><span className="mb-2 block text-sm text-slate-300">Name</span><input name="name" defaultValue="Ali Bin Nadeem" className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" /></label>
+          <label className="block"><span className="mb-2 block text-sm text-slate-300">Email</span><input name="email" type="email" required className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" /></label>
+          <label className="block"><span className="mb-2 block text-sm text-slate-300">Password</span><input name="password" type="password" minLength={12} required className="w-full rounded-xl border border-white/10 bg-slate-900 px-4 py-3 outline-none ring-emerald-400 focus:ring-2" /></label>
+          <button type="submit" className="w-full rounded-xl bg-emerald-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300">Create administrator</button>
         </form>
       </section>
     </main>
