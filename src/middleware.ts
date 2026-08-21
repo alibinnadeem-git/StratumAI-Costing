@@ -1,27 +1,22 @@
-import NextAuth from "next-auth";
-import { NextResponse } from "next/server";
-import authConfig from "@/lib/auth.config";
+import { NextResponse, type NextRequest } from "next/server";
 
-const { auth } = NextAuth(authConfig);
+const SESSION_COOKIE = "stratum_session";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth?.user;
+export default function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/setup-admin") ||
     path.startsWith("/api/auth");
 
-  if (!isLoggedIn && !isPublic) {
+  if (!isPublic && !req.cookies.get(SESSION_COOKIE)?.value) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
     loginUrl.searchParams.set("next", path);
     return NextResponse.redirect(loginUrl);
   }
-  if (isLoggedIn && (path.startsWith("/login") || path.startsWith("/setup-admin"))) {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
-  }
+
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
