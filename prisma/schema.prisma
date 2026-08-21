@@ -1,7 +1,6 @@
-// Stratum AI Operations Suite — multi-tenant project + estimating schema.
-// One Postgres database is shared by many organizations. Every tenant-owned
-// row carries organizationId, and every server action re-checks the active
-// organization membership before reading or mutating data.
+// Stratum AI — multi-org > organization > account/tenant > operational records.
+// Organization is the company boundary. Account is the operational tenant/workspace.
+// Every operational row is scoped to an account directly or through an account-owned parent.
 
 generator client {
   provider = "prisma-client-js"
@@ -101,17 +100,41 @@ model Organization {
   slug      String   @unique
   createdAt DateTime @default(now())
 
-  memberships   Membership[]
-  projects      Project[]
-  auditLogs     AuditLog[]
-  invites       Invite[]
-  suppliers     Supplier[]
-  costSettings  CostSettings?
-  costItems     CostItem[]
-  estimates     CostEstimate[]
-  jobCosts      JobCostEntry[]
+  memberships    Membership[]
+  accounts       Account[]
+  projects       Project[]
+  auditLogs      AuditLog[]
+  invites        Invite[]
+  suppliers      Supplier[]
+  costSettings   CostSettings[]
+  costItems      CostItem[]
+  estimates      CostEstimate[]
+  jobCosts       JobCostEntry[]
   supplierQuotes SupplierQuote[]
-  marketFactors MarketFactor[]
+  marketFactors  MarketFactor[]
+}
+
+model Account {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships    AccountMembership[]
+  projects       Project[]
+  suppliers      Supplier[]
+  costSettings   CostSettings?
+  costItems      CostItem[]
+  estimates      CostEstimate[]
+  jobCosts       JobCostEntry[]
+  supplierQuotes SupplierQuote[]
+  marketFactors  MarketFactor[]
+  auditLogs      AuditLog[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
 }
 
 model User {
@@ -122,14 +145,15 @@ model User {
   systemRole   SystemRole @default(USER)
   createdAt    DateTime   @default(now())
 
-  memberships     Membership[]
-  auditLogs       AuditLog[]
-  rfisCreated     Rfi[]           @relation("RfiCreatedBy")
-  takeoffImports  TakeoffImport[] @relation("TakeoffImportedBy")
-  rfqsCreated     Rfq[]           @relation("RfqCreatedBy")
-  estimatesCreated CostEstimate[] @relation("EstimateCreatedBy")
-  jobCostsCreated JobCostEntry[]  @relation("JobCostCreatedBy")
-  quotesCreated   SupplierQuote[] @relation("SupplierQuoteCreatedBy")
+  memberships        Membership[]
+  accountMemberships AccountMembership[]
+  auditLogs          AuditLog[]
+  rfisCreated        Rfi[]           @relation("RfiCreatedBy")
+  takeoffImports     TakeoffImport[] @relation("TakeoffImportedBy")
+  rfqsCreated        Rfq[]           @relation("RfqCreatedBy")
+  estimatesCreated   CostEstimate[] @relation("EstimateCreatedBy")
+  jobCostsCreated    JobCostEntry[]  @relation("JobCostCreatedBy")
+  quotesCreated      SupplierQuote[] @relation("SupplierQuoteCreatedBy")
 }
 
 model Membership {
@@ -144,6 +168,20 @@ model Membership {
 
   @@unique([userId, organizationId])
   @@index([organizationId])
+}
+
+model AccountMembership {
+  id        String   @id @default(cuid())
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountId])
+  @@index([accountId])
 }
 
 model Invite {
@@ -169,6 +207,8 @@ model Project {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   rfis           Rfi[]
   auditLogs      AuditLog[]
@@ -179,6 +219,7 @@ model Project {
   supplierQuotes SupplierQuote[]
 
   @@index([organizationId])
+  @@index([accountId])
 }
 
 model Rfi {
@@ -220,11 +261,14 @@ model Supplier {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   rfqRecipients RfqRecipient[]
   quotes        SupplierQuote[]
 
   @@index([organizationId])
+  @@index([accountId])
 }
 
 model TakeoffImport {
@@ -313,19 +357,21 @@ model RfqRecipient {
   @@index([rfqId])
 }
 
-// One settings row per tenant. Estimates snapshot these values at creation,
-// so later shop-rate changes do not silently rewrite old bids.
 model CostSettings {
-  id                   String  @id @default(cuid())
-  laborRate            Float   @default(95)
-  overheadPercent      Float   @default(12)
-  profitMarginPercent  Float   @default(15)
-  difficultyMultiplier Float   @default(1)
+  id                   String            @id @default(cuid())
+  laborRate            Float             @default(95)
+  overheadPercent      Float             @default(12)
+  profitMarginPercent  Float             @default(15)
+  difficultyMultiplier Float             @default(1)
   defaultCondition     EstimateCondition @default(NORMAL)
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime          @updatedAt
 
-  organizationId String       @unique
+  organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String       @unique
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 model CostItem {
@@ -340,9 +386,6 @@ model CostItem {
   lastUpdated       DateTime   @updatedAt
   createdAt         DateTime   @default(now())
 
-  // Optional source-checked NECA data. Values remain in the source unit
-  // shown by necaSourceUnit; the default item laborHoursPerUnit is the
-  // organization's selected working rate for day-to-day estimating.
   necaSourcePage    Int?
   necaSourceUnit    String?
   necaNormal        Float?
@@ -352,6 +395,8 @@ model CostItem {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   estimateLines  EstimateLineItem[]
   jobCosts       JobCostEntry[]
@@ -359,6 +404,8 @@ model CostItem {
 
   @@index([organizationId, category])
   @@index([organizationId, description])
+  @@index([accountId, category])
+  @@index([accountId, description])
 }
 
 model CostEstimate {
@@ -377,6 +424,8 @@ model CostEstimate {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -387,24 +436,25 @@ model CostEstimate {
   lineItems EstimateLineItem[]
   adders    EstimateAdder[]
 
-  @@unique([organizationId, number])
+  @@unique([accountId, number])
   @@index([organizationId, status])
+  @@index([accountId, status])
   @@index([projectId])
 }
 
 model EstimateLineItem {
-  id          String @id @default(cuid())
-  description String
-  category    String?
-  quantity    Float  @default(1)
-  unit        String @default("EA")
-  materialCost Float @default(0)
-  laborHoursPerUnit Float @default(0)
-  laborNormal        Float?
-  laborDifficult     Float?
+  id                String @id @default(cuid())
+  description       String
+  category          String?
+  quantity          Float  @default(1)
+  unit              String @default("EA")
+  materialCost      Float  @default(0)
+  laborHoursPerUnit Float  @default(0)
+  laborNormal       Float?
+  laborDifficult    Float?
   laborVeryDifficult Float?
-  notes               String?
-  sortOrder           Int    @default(0)
+  notes             String?
+  sortOrder         Int    @default(0)
 
   estimateId String
   estimate   CostEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
@@ -440,6 +490,8 @@ model JobCostEntry {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -451,6 +503,7 @@ model JobCostEntry {
   createdBy   User? @relation("JobCostCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, date])
+  @@index([accountId, date])
 }
 
 model SupplierQuote {
@@ -467,6 +520,8 @@ model SupplierQuote {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   supplierId String?
   supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -481,6 +536,7 @@ model SupplierQuote {
   createdBy   User? @relation("SupplierQuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, quoteDate])
+  @@index([accountId, quoteDate])
 }
 
 model MarketFactor {
@@ -498,8 +554,11 @@ model MarketFactor {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, createdAt])
+  @@index([accountId, createdAt])
 }
 
 model AuditLog {
@@ -510,6 +569,8 @@ model AuditLog {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -518,4 +579,5 @@ model AuditLog {
   user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
+  @@index([accountId, createdAt])
 }
