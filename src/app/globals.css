@@ -23,3 +23,209 @@ html, body { height: 100%; }
     linear-gradient(90deg, rgba(148,163,184,0.10) 1px, transparent 1px);
   background-size: 28px 28px;
 }
+
+/* Post-login workspace intentionally follows the original Stratum AI Costing Tool.
+   Login/onboarding remain outside this scope and retain their current UI. */
+.stratum-workspace {
+  --stratum-bg-deep: #0A1A2B;
+  --stratum-bg-panel: #0E2438;
+  --stratum-bg-panel-2: #0B1F32;
+  --stratum-grid-line: #1C3A57;
+  --stratum-grid-line-soft: #152C44;
+  --stratum-ink: #DCEBF5;
+  --stratum-ink-dim: #9FB6C7;
+  --stratum-ink-mute: #6D8AA0;
+  --stratum-copper: #C97C3D;
+  --stratum-copper-bright: #E0954F;
+  --stratum-cyan: #6FD6C9;
+  --stratum-amber: #E8B339;
+  --stratum-danger: #E0715C;
+  --stratum-good: #7FCB9B;
+  min-height: 100vh;
+  color: var(--stratum-ink);
+  background-color: var(--stratum-bg-deep);
+  background-image:
+    linear-gradient(var(--stratum-grid-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--stratum-grid-line-soft) 1px, transparent 1px);
+  background-size: 28px 28px;
+  padding-bottom: 46px;
+}
+
+.stratum-workspace ::selection {
+  background: var(--stratum-copper);
+  color: var(--stratum-bg-deep);
+}
+
+.stratum-workspace .stratum-shell {
+  border-bottom: 1px solid var(--stratum-grid-line);
+  background: rgba(10, 26, 43, 0.96);
+  backdrop-filter: blur(18px);
+}
+
+.stratum-workspace .stratum-brand-mark {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--stratum-copper);
+  border-radius: 999px;
+  color: var(--stratum-copper-bright);
+  font-weight: 800;
+}
+
+.stratum-workspace .stratum-brand-mark::before,
+.stratum-workspace .stratum-brand-mark::after {
+  content: "";
+  position: absolute;
+  background: var(--stratum-copper);
+  opacity: .9;
+}
+.stratum-workspace .stratum-brand-mark::before { width: 1px; height: 44px; left: 50%; transform: translateX(-50%); }
+.stratum-workspace .stratum-brand-mark::after { height: 1px; width: 44px; top: 50%; transform: translateY(-50%); }
+
+.stratum-workspace .stratum-tabs {
+  border-top: 1px solid rgba(255,255,255,.03);
+  border-bottom: 1px solid var(--stratum-grid-line);
+  background: rgba(11,31,50,.96);
+}
+
+.stratum-workspace .stratum-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  padding: 11px 13px 10px;
+  color: var(--stratum-ink-mute);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  transition: color .14s ease, background .14s ease, border-color .14s ease;
+}
+.stratum-workspace .stratum-tab:hover {
+  color: var(--stratum-ink);
+  background: rgba(111,214,201,.035);
+  border-bottom-color: var(--stratum-copper);
+}
+.stratum-workspace .stratum-tab-index { color: var(--stratum-copper); opacity: .78; }
+
+.stratum-workspace .stratum-context-label {
+  color: var(--stratum-ink-mute);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.stratum-workspace .stratum-context-select,
+.stratum-workspace select.stratum-context-select {
+  border: 1px solid var(--stratum-grid-line);
+  border-radius: 2px;
+  background: var(--stratum-bg-panel-2);
+  color: var(--stratum-ink);
+  padding: 6px 28px 6px 8px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.stratum-workspace .stratum-role {
+  border: 1px solid var(--stratum-copper);
+  border-radius: 2px;
+  background: rgba(201,124,61,.08);
+  color: var(--stratum-copper-bright);
+  padding: 5px 8px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: .07em;
+}
+
+.stratum-workspace .stratum-main { max-width: 1280px; margin: 0 auto; padding: 24px 28px; }
+
+/* Re-skin the existing React feature pages without changing their server-backed behavior. */
+.stratum-workspace .bg-white,
+.stratum-workspace .bg-slate-50,
+.stratum-workspace .bg-slate-100 { background-color: var(--stratum-bg-panel) !important; }
+.stratum-workspace .bg-slate-900,
+.stratum-workspace .bg-graphite-950,
+.stratum-workspace .bg-graphite-900,
+.stratum-workspace .bg-graphite-850,
+.stratum-workspace .bg-graphite-800 { background-color: var(--stratum-bg-panel-2) !important; }
+
+.stratum-workspace .text-slate-950,
+.stratum-workspace .text-slate-900,
+.stratum-workspace .text-slate-800,
+.stratum-workspace .text-slate-700 { color: var(--stratum-ink) !important; }
+.stratum-workspace .text-slate-600,
+.stratum-workspace .text-slate-500,
+.stratum-workspace .text-slate-400 { color: var(--stratum-ink-dim) !important; }
+
+.stratum-workspace .border-slate-100,
+.stratum-workspace .border-slate-200,
+.stratum-workspace .border-slate-300,
+.stratum-workspace .border-graphite-600,
+.stratum-workspace .border-graphite-700 { border-color: var(--stratum-grid-line) !important; }
+
+.stratum-workspace input:not([type="checkbox"]):not([type="radio"]),
+.stratum-workspace select,
+.stratum-workspace textarea {
+  border-radius: 2px !important;
+  border-color: var(--stratum-grid-line) !important;
+  background: var(--stratum-bg-panel-2) !important;
+  color: var(--stratum-ink) !important;
+}
+.stratum-workspace input:focus,
+.stratum-workspace select:focus,
+.stratum-workspace textarea:focus { border-color: var(--stratum-copper) !important; outline: none !important; box-shadow: none !important; }
+.stratum-workspace input::placeholder,
+.stratum-workspace textarea::placeholder { color: var(--stratum-ink-mute) !important; }
+
+.stratum-workspace table { font-family: var(--font-mono), ui-monospace, monospace; }
+.stratum-workspace thead th {
+  color: var(--stratum-ink-mute) !important;
+  border-color: var(--stratum-grid-line) !important;
+  font-size: 10px !important;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.stratum-workspace tbody td { border-color: var(--stratum-grid-line-soft) !important; color: var(--stratum-ink) !important; }
+.stratum-workspace tbody tr:hover { background: rgba(111,214,201,.035) !important; }
+
+.stratum-workspace button,
+.stratum-workspace a { border-radius: 2px; }
+.stratum-workspace .shadow-card,
+.stratum-workspace .shadow-card-hover,
+.stratum-workspace .shadow-sm,
+.stratum-workspace .shadow { box-shadow: none !important; }
+
+.stratum-workspace .stratum-titleblock {
+  position: fixed;
+  z-index: 50;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-top: 1px solid var(--stratum-copper);
+  background: rgba(11,31,50,.98);
+  padding: 7px 16px;
+  color: var(--stratum-ink-mute);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: .045em;
+}
+.stratum-workspace .stratum-titleblock b { color: var(--stratum-copper-bright); font-weight: 500; }
+.stratum-workspace .stratum-titleblock .divider { color: var(--stratum-grid-line); }
+
+@media (max-width: 760px) {
+  .stratum-workspace { padding-bottom: 60px; }
+  .stratum-workspace .stratum-main { padding: 18px 14px; }
+  .stratum-workspace .stratum-tab { padding-inline: 10px; font-size: 10px; }
+  .stratum-workspace .stratum-titleblock { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
+}
