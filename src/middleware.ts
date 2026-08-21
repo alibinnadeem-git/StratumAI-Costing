@@ -7,7 +7,8 @@ export default function middleware(req: NextRequest) {
   const isPublic =
     path.startsWith("/login") ||
     path.startsWith("/setup-admin") ||
-    path.startsWith("/api/auth");
+    path.startsWith("/api/auth") ||
+    path.startsWith("/api/health");
 
   if (!isPublic && !req.cookies.get(SESSION_COOKIE)?.value) {
     const loginUrl = new URL("/login", req.nextUrl.origin);
