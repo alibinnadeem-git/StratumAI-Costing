@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Membership, Organization, Role, User } from "@prisma/client";
-import { bootstrapOrganization } from "@/lib/tenant-bootstrap";
 
 export const ORG_COOKIE = "stratum_org_id";
 
@@ -30,19 +29,18 @@ export async function requireOrgContext(): Promise<ActiveOrgContext> {
 
   const [memberships, dbUser] = await Promise.all([
     getMemberships(session.user.id),
-    db.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, name: true, systemRole: true } }),
+    db.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, systemRole: true },
+    }),
   ]);
+
   if (!dbUser) redirect("/login");
   if (memberships.length === 0) redirect("/onboarding");
 
   const cookieStore = await cookies();
   const preferredOrgId = cookieStore.get(ORG_COOKIE)?.value;
   const active = memberships.find((m) => m.organizationId === preferredOrgId) ?? memberships[0]!;
-
-  const hasCostSettings = await db.costSettings.findUnique({ where: { organizationId: active.organizationId }, select: { id: true } });
-  if (!hasCostSettings) {
-    await db.$transaction(async (tx) => bootstrapOrganization(tx, active.organizationId));
-  }
 
   return {
     user: dbUser,
