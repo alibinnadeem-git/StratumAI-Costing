@@ -3,28 +3,28 @@
 import { signIn } from "@/lib/auth";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { redirect } from "next/navigation";
 
-function safeNext(value: unknown) {
-  const path = String(value ?? "/dashboard");
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
+function isNextRedirect(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  if (error.message === "NEXT_REDIRECT" || error.message.includes("NEXT_REDIRECT")) return true;
+  const digest = (error as Error & { digest?: unknown }).digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT;");
 }
 
 export async function loginAction(_prev: { error?: string } | undefined, formData: FormData) {
-  const email = String(formData.get("email") ?? "").toLowerCase().trim();
+  const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = safeNext(formData.get("next"));
+  const next = String(formData.get("next") ?? "/dashboard");
 
-  let authenticated = false;
   try {
-    authenticated = await signIn("credentials", { email, password });
+    const ok = await signIn("credentials", { email, password, redirectTo: next || "/dashboard" });
+    if (ok === false) return { error: "Invalid email or password." };
+    return {};
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     console.error("Login failed", error);
     return { error: "Sign-in is temporarily unavailable. Please try again." };
   }
-
-  if (!authenticated) return { error: "Invalid email or password." };
-  redirect(next);
 }
 
 export async function registerOrgAction(
@@ -56,14 +56,11 @@ export async function registerOrgAction(
       await tx.costSettings.create({ data: { organizationId: org.id } });
     });
 
-    const authenticated = await signIn("credentials", { email, password });
-    if (!authenticated) {
-      return { error: "Your organization was created, but automatic sign-in failed. Please sign in." };
-    }
+    await signIn("credentials", { email, password, redirectTo: "/dashboard" });
+    return {};
   } catch (error) {
+    if (isNextRedirect(error)) throw error;
     console.error("Organization registration failed", error);
     return { error: "We could not create the organization right now. Please try again." };
   }
-
-  redirect("/dashboard");
 }
