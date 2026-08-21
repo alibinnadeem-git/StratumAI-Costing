@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { AdderBasis, AdderType, CostSource, EstimateCondition, EstimateStatus, MarketAffects, MarketDirection } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireOrgContext, requireRole } from "@/lib/session";
+import { requireAccountRole, requireTenantContext } from "@/lib/session";
 import { logAction } from "@/lib/audit";
 import { NECA_RATES } from "@/lib/costing-data";
 
@@ -21,9 +21,9 @@ function necaUnitToToolUnit(unit: string) {
 }
 
 export async function saveCostSettingsAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   await db.costSettings.upsert({
-    where: { organizationId: ctx.organization.id },
+    where: { accountId: ctx.account.id },
     update: {
       laborRate: num(formData, "laborRate", 95),
       overheadPercent: num(formData, "overheadPercent", 12),
@@ -33,6 +33,7 @@ export async function saveCostSettingsAction(formData: FormData) {
     },
     create: {
       organizationId: ctx.organization.id,
+      accountId: ctx.account.id,
       laborRate: num(formData, "laborRate", 95),
       overheadPercent: num(formData, "overheadPercent", 12),
       profitMarginPercent: num(formData, "profitMarginPercent", 15),
@@ -40,18 +41,19 @@ export async function saveCostSettingsAction(formData: FormData) {
       defaultCondition: str(formData, "defaultCondition") as EstimateCondition,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.settings.update", detail: "Updated organization estimating defaults" });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.settings.update", detail: "Updated account estimating defaults" });
   revalidatePath("/costing");
   revalidatePath("/costing/settings");
 }
 
 export async function createCostItemAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const description = str(formData, "description");
   if (!description) return;
   await db.costItem.create({
     data: {
       organizationId: ctx.organization.id,
+      accountId: ctx.account.id,
       category: str(formData, "category") || "Uncategorized",
       description,
       unit: str(formData, "unit") || "EA",
@@ -61,15 +63,15 @@ export async function createCostItemAction(formData: FormData) {
       notes: str(formData, "notes") || null,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.item.create", detail: `Created cost item: ${description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.item.create", detail: `Created cost item: ${description}` });
   revalidatePath("/costing/items");
 }
 
 export async function updateCostItemAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const id = str(formData, "id");
-  const item = await db.costItem.findFirst({ where: { id, organizationId: ctx.organization.id } });
-  if (!item) throw new Error("Cost item not found in this organization.");
+  const item = await db.costItem.findFirst({ where: { id, accountId: ctx.account.id } });
+  if (!item) throw new Error("Cost item not found in this account.");
   await db.costItem.update({
     where: { id },
     data: {
@@ -82,22 +84,22 @@ export async function updateCostItemAction(formData: FormData) {
       notes: str(formData, "notes") || null,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.item.update", detail: `Updated cost item: ${item.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.item.update", detail: `Updated cost item: ${item.description}` });
   revalidatePath("/costing/items");
 }
 
 export async function deleteCostItemAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const id = str(formData, "id");
-  const item = await db.costItem.findFirst({ where: { id, organizationId: ctx.organization.id } });
+  const item = await db.costItem.findFirst({ where: { id, accountId: ctx.account.id } });
   if (!item) return;
   await db.costItem.delete({ where: { id } });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.item.delete", detail: `Deleted cost item: ${item.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.item.delete", detail: `Deleted cost item: ${item.description}` });
   revalidatePath("/costing/items");
 }
 
 export async function importNecaRateAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const index = Number(str(formData, "index"));
   const condition = (str(formData, "condition") || "NORMAL") as EstimateCondition;
   const r = NECA_RATES[index];
@@ -105,7 +107,7 @@ export async function importNecaRateAction(formData: FormData) {
   const workingRate = condition === "DIFFICULT" ? r.difficult : condition === "VERY_DIFFICULT" ? r.veryDifficult : r.normal;
   const unit = necaUnitToToolUnit(r.unit);
   const existing = await db.costItem.findFirst({
-    where: { organizationId: ctx.organization.id, necaSourcePage: r.sourcePage, description: r.description },
+    where: { accountId: ctx.account.id, necaSourcePage: r.sourcePage, description: r.description },
   });
   if (existing) {
     await db.costItem.update({
@@ -127,6 +129,7 @@ export async function importNecaRateAction(formData: FormData) {
     await db.costItem.create({
       data: {
         organizationId: ctx.organization.id,
+        accountId: ctx.account.id,
         category: "NECA Imported",
         description: r.description,
         unit,
@@ -143,28 +146,29 @@ export async function importNecaRateAction(formData: FormData) {
       },
     });
   }
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.neca.import", detail: `Imported verified NECA rate: ${r.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.neca.import", detail: `Imported verified NECA rate: ${r.description}` });
   revalidatePath("/costing/items");
   revalidatePath("/costing/neca");
 }
 
 export async function createEstimateAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const name = str(formData, "name");
   if (!name) throw new Error("Estimate name is required.");
   const projectIdRaw = str(formData, "projectId");
   let projectId: string | null = null;
   if (projectIdRaw) {
-    const project = await db.project.findFirst({ where: { id: projectIdRaw, organizationId: ctx.organization.id } });
-    if (!project) throw new Error("Project not found in this organization.");
+    const project = await db.project.findFirst({ where: { id: projectIdRaw, accountId: ctx.account.id } });
+    if (!project) throw new Error("Project not found in this account.");
     projectId = project.id;
   }
-  const settings = await db.costSettings.findUnique({ where: { organizationId: ctx.organization.id } });
+  const settings = await db.costSettings.findUnique({ where: { accountId: ctx.account.id } });
   const estimate = await db.$transaction(async (tx) => {
-    const max = await tx.costEstimate.aggregate({ where: { organizationId: ctx.organization.id }, _max: { number: true } });
+    const max = await tx.costEstimate.aggregate({ where: { accountId: ctx.account.id }, _max: { number: true } });
     return tx.costEstimate.create({
       data: {
         organizationId: ctx.organization.id,
+        accountId: ctx.account.id,
         projectId,
         number: (max._max.number ?? 0) + 1,
         name,
@@ -178,20 +182,20 @@ export async function createEstimateAction(formData: FormData) {
       },
     });
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId, action: "cost.estimate.create", detail: `Created estimate #${estimate.number}: ${estimate.name}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId, action: "cost.estimate.create", detail: `Created estimate #${estimate.number}: ${estimate.name}` });
   redirect(`/costing/estimates/${estimate.id}`);
 }
 
 export async function updateEstimateAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const estimate = await db.costEstimate.findFirst({ where: { id, organizationId: ctx.organization.id } });
+  const estimate = await db.costEstimate.findFirst({ where: { id, accountId: ctx.account.id } });
   if (!estimate) throw new Error("Estimate not found.");
   const projectIdRaw = str(formData, "projectId");
   let projectId: string | null = null;
   if (projectIdRaw) {
-    const project = await db.project.findFirst({ where: { id: projectIdRaw, organizationId: ctx.organization.id } });
-    if (!project) throw new Error("Project not found in this organization.");
+    const project = await db.project.findFirst({ where: { id: projectIdRaw, accountId: ctx.account.id } });
+    if (!project) throw new Error("Project not found in this account.");
     projectId = project.id;
   }
   await db.costEstimate.update({
@@ -208,43 +212,43 @@ export async function updateEstimateAction(formData: FormData) {
       notes: str(formData, "notes") || null,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId, action: "cost.estimate.update", detail: `Updated estimate #${estimate.number}: ${estimate.name}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId, action: "cost.estimate.update", detail: `Updated estimate #${estimate.number}: ${estimate.name}` });
   revalidatePath(`/costing/estimates/${id}`);
   revalidatePath("/costing/estimates");
 }
 
 export async function deleteEstimateAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const id = str(formData, "id");
-  const estimate = await db.costEstimate.findFirst({ where: { id, organizationId: ctx.organization.id } });
+  const estimate = await db.costEstimate.findFirst({ where: { id, accountId: ctx.account.id } });
   if (!estimate) return;
   await db.costEstimate.delete({ where: { id } });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId: estimate.projectId, action: "cost.estimate.delete", detail: `Deleted estimate #${estimate.number}: ${estimate.name}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId: estimate.projectId, action: "cost.estimate.delete", detail: `Deleted estimate #${estimate.number}: ${estimate.name}` });
   redirect("/costing/estimates");
 }
 
 async function requireEstimate(estimateId: string) {
-  const ctx = await requireOrgContext();
-  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, organizationId: ctx.organization.id } });
+  const ctx = await requireTenantContext();
+  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } });
   if (!estimate) throw new Error("Estimate not found.");
   return { ctx, estimate };
 }
 
 export async function addEstimateLineAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const estimateId = str(formData, "estimateId");
   const costItemId = str(formData, "costItemId");
   const quantity = Math.max(0, num(formData, "quantity", 1));
   const [estimate, item] = await Promise.all([
-    db.costEstimate.findFirst({ where: { id: estimateId, organizationId: ctx.organization.id } }),
-    db.costItem.findFirst({ where: { id: costItemId, organizationId: ctx.organization.id } }),
+    db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } }),
+    db.costItem.findFirst({ where: { id: costItemId, accountId: ctx.account.id } }),
   ]);
   if (!estimate || !item) throw new Error("Estimate or cost item not found.");
   const count = await db.estimateLineItem.count({ where: { estimateId } });
   await db.estimateLineItem.create({
     data: {
       estimateId,
-      costItemId: costItemId,
+      costItemId,
       description: item.description,
       category: item.category,
       quantity,
@@ -282,9 +286,9 @@ export async function addCustomEstimateLineAction(formData: FormData) {
 }
 
 export async function updateEstimateLineAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { organizationId: ctx.organization.id } }, include: { estimate: true } });
+  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { accountId: ctx.account.id } }, include: { estimate: true } });
   if (!line) throw new Error("Estimate line not found.");
   await db.estimateLineItem.update({
     where: { id },
@@ -300,18 +304,18 @@ export async function updateEstimateLineAction(formData: FormData) {
 }
 
 export async function deleteEstimateLineAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { organizationId: ctx.organization.id } } });
+  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { accountId: ctx.account.id } } });
   if (!line) return;
   await db.estimateLineItem.delete({ where: { id } });
   revalidatePath(`/costing/estimates/${line.estimateId}`);
 }
 
 export async function importLatestTakeoffAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const estimateId = str(formData, "estimateId");
-  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, organizationId: ctx.organization.id } });
+  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } });
   if (!estimate?.projectId) throw new Error("Link the estimate to a project before importing a takeoff.");
   const latest = await db.takeoffImport.findFirst({ where: { projectId: estimate.projectId }, include: { items: true }, orderBy: { importedAt: "desc" } });
   if (!latest) throw new Error("No takeoff import exists for this project.");
@@ -329,14 +333,14 @@ export async function importLatestTakeoffAction(formData: FormData) {
       sortOrder: count + i,
     })),
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId: estimate.projectId, action: "cost.takeoff.import", detail: `Imported ${latest.items.length} takeoff rows into estimate #${estimate.number}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId: estimate.projectId, action: "cost.takeoff.import", detail: `Imported ${latest.items.length} takeoff rows into estimate #${estimate.number}` });
   revalidatePath(`/costing/estimates/${estimateId}`);
 }
 
 export async function addEstimateAdderAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const estimateId = str(formData, "estimateId");
-  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, organizationId: ctx.organization.id } });
+  const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } });
   if (!estimate) throw new Error("Estimate not found.");
   await db.estimateAdder.create({
     data: {
@@ -351,23 +355,24 @@ export async function addEstimateAdderAction(formData: FormData) {
 }
 
 export async function deleteEstimateAdderAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const adder = await db.estimateAdder.findFirst({ where: { id, estimate: { organizationId: ctx.organization.id } } });
+  const adder = await db.estimateAdder.findFirst({ where: { id, estimate: { accountId: ctx.account.id } } });
   if (!adder) return;
   await db.estimateAdder.delete({ where: { id } });
   revalidatePath(`/costing/estimates/${adder.estimateId}`);
 }
 
 export async function createJobCostAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const costItemId = str(formData, "costItemId") || null;
   const projectId = str(formData, "projectId") || null;
-  if (costItemId && !(await db.costItem.findFirst({ where: { id: costItemId, organizationId: ctx.organization.id } }))) throw new Error("Cost item not found.");
-  if (projectId && !(await db.project.findFirst({ where: { id: projectId, organizationId: ctx.organization.id } }))) throw new Error("Project not found.");
+  if (costItemId && !(await db.costItem.findFirst({ where: { id: costItemId, accountId: ctx.account.id } }))) throw new Error("Cost item not found.");
+  if (projectId && !(await db.project.findFirst({ where: { id: projectId, accountId: ctx.account.id } }))) throw new Error("Project not found.");
   const entry = await db.jobCostEntry.create({
     data: {
       organizationId: ctx.organization.id,
+      accountId: ctx.account.id,
       costItemId,
       projectId,
       createdById: ctx.user.id,
@@ -379,16 +384,16 @@ export async function createJobCostAction(formData: FormData) {
       notes: str(formData, "notes") || null,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId, action: "cost.job_actual.create", detail: `Logged job cost: ${entry.jobName}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId, action: "cost.job_actual.create", detail: `Logged job cost: ${entry.jobName}` });
   revalidatePath("/costing/job-costs");
 }
 
 export async function applyJobCostToItemAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const entryId = str(formData, "entryId");
-  const entry = await db.jobCostEntry.findFirst({ where: { id: entryId, organizationId: ctx.organization.id } });
+  const entry = await db.jobCostEntry.findFirst({ where: { id: entryId, accountId: ctx.account.id } });
   if (!entry?.costItemId || entry.quantity <= 0) return;
-  const item = await db.costItem.findFirst({ where: { id: entry.costItemId, organizationId: ctx.organization.id } });
+  const item = await db.costItem.findFirst({ where: { id: entry.costItemId, accountId: ctx.account.id } });
   if (!item) return;
   await db.costItem.update({
     where: { id: item.id },
@@ -399,22 +404,23 @@ export async function applyJobCostToItemAction(formData: FormData) {
       notes: `Calibrated from job cost actual: ${entry.jobName} (${entry.date.toISOString().slice(0,10)}).`,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.item.calibrate.history", detail: `Applied job actual to ${item.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.item.calibrate.history", detail: `Applied job actual to ${item.description}` });
   revalidatePath("/costing/job-costs");
   revalidatePath("/costing/items");
 }
 
 export async function createSupplierQuoteAction(formData: FormData) {
-  const ctx = await requireRole("MEMBER");
+  const ctx = await requireAccountRole("MEMBER");
   const supplierId = str(formData, "supplierId") || null;
   const costItemId = str(formData, "costItemId") || null;
   const projectId = str(formData, "projectId") || null;
-  if (supplierId && !(await db.supplier.findFirst({ where: { id: supplierId, organizationId: ctx.organization.id } }))) throw new Error("Supplier not found.");
-  if (costItemId && !(await db.costItem.findFirst({ where: { id: costItemId, organizationId: ctx.organization.id } }))) throw new Error("Cost item not found.");
-  if (projectId && !(await db.project.findFirst({ where: { id: projectId, organizationId: ctx.organization.id } }))) throw new Error("Project not found.");
+  if (supplierId && !(await db.supplier.findFirst({ where: { id: supplierId, accountId: ctx.account.id } }))) throw new Error("Supplier not found.");
+  if (costItemId && !(await db.costItem.findFirst({ where: { id: costItemId, accountId: ctx.account.id } }))) throw new Error("Cost item not found.");
+  if (projectId && !(await db.project.findFirst({ where: { id: projectId, accountId: ctx.account.id } }))) throw new Error("Project not found.");
   const quote = await db.supplierQuote.create({
     data: {
       organizationId: ctx.organization.id,
+      accountId: ctx.account.id,
       supplierId,
       costItemId,
       projectId,
@@ -429,30 +435,31 @@ export async function createSupplierQuoteAction(formData: FormData) {
       notes: str(formData, "notes") || null,
     },
   });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, projectId, action: "cost.quote.create", detail: `Logged supplier quote: ${quote.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId, action: "cost.quote.create", detail: `Logged supplier quote: ${quote.description}` });
   revalidatePath("/costing/quotes");
 }
 
 export async function applyQuoteToItemAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const quoteId = str(formData, "quoteId");
-  const quote = await db.supplierQuote.findFirst({ where: { id: quoteId, organizationId: ctx.organization.id } });
+  const quote = await db.supplierQuote.findFirst({ where: { id: quoteId, accountId: ctx.account.id } });
   if (!quote?.costItemId) return;
-  const item = await db.costItem.findFirst({ where: { id: quote.costItemId, organizationId: ctx.organization.id } });
+  const item = await db.costItem.findFirst({ where: { id: quote.costItemId, accountId: ctx.account.id } });
   if (!item) return;
   await db.costItem.update({ where: { id: item.id }, data: { materialCost: quote.unitMaterialCost, source: "QUOTE", notes: `Material price updated from supplier quote ${quote.reference || quote.description} dated ${quote.quoteDate.toISOString().slice(0,10)}.` } });
-  await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "cost.item.calibrate.quote", detail: `Applied supplier quote to ${item.description}` });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, action: "cost.item.calibrate.quote", detail: `Applied supplier quote to ${item.description}` });
   revalidatePath("/costing/quotes");
   revalidatePath("/costing/items");
 }
 
 export async function createMarketFactorAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const description = str(formData, "description");
   if (!description) return;
   await db.marketFactor.create({
     data: {
       organizationId: ctx.organization.id,
+      accountId: ctx.account.id,
       category: str(formData, "category") || "Market",
       description,
       direction: (str(formData, "direction") || "INCREASE") as MarketDirection,
@@ -468,8 +475,8 @@ export async function createMarketFactorAction(formData: FormData) {
 }
 
 export async function deleteMarketFactorAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireAccountRole("ADMIN");
   const id = str(formData, "id");
-  await db.marketFactor.deleteMany({ where: { id, organizationId: ctx.organization.id } });
+  await db.marketFactor.deleteMany({ where: { id, accountId: ctx.account.id } });
   revalidatePath("/costing/market");
 }

@@ -2,14 +2,15 @@
 
 import { signIn } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { bootstrapOrganization } from "@/lib/tenant-bootstrap";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 
 type ActionState = { error?: string };
 
 function safeNext(value: unknown) {
-  const path = String(value ?? "/dashboard");
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/dashboard";
+  const path = String(value ?? "/costing/items");
+  return path.startsWith("/") && !path.startsWith("//") ? path : "/costing/items";
 }
 
 function authFailureMessage(error: unknown) {
@@ -107,7 +108,10 @@ export async function registerOrgAction(
       await tx.membership.create({
         data: { userId: user.id, organizationId: org.id, role: "OWNER" },
       });
-      await tx.costSettings.create({ data: { organizationId: org.id } });
+      const account = await bootstrapOrganization(tx, org.id);
+      await tx.accountMembership.create({
+        data: { userId: user.id, accountId: account.id, role: "OWNER" },
+      });
     });
 
     const authenticated = await signIn("credentials", { email, password });
@@ -119,5 +123,5 @@ export async function registerOrgAction(
     return { error: authFailureMessage(error) };
   }
 
-  redirect("/dashboard");
+  redirect("/costing/items");
 }

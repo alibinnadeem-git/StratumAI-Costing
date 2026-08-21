@@ -14,10 +14,12 @@ import {
   ShoppingCart,
   Truck,
 } from "lucide-react";
-import { requireOrgContext } from "@/lib/session";
+import { requireTenantContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
+import JarvisCopilot from "@/components/JarvisCopilot";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
+import AccountSwitcher from "./AccountSwitcher";
 
 const CORE_NAV = [
   { href: "/costing/items", label: "Item Database", icon: Boxes },
@@ -38,8 +40,8 @@ const OPERATIONS_NAV = [
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const ctx = await requireOrgContext();
-  const isAdmin = atLeast(ctx.role, "ADMIN");
+  const ctx = await requireTenantContext();
+  const isAdmin = atLeast(ctx.accountRole, "ADMIN");
 
   return (
     <div className="stratum-workspace">
@@ -70,9 +72,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </div>
             )}
 
+            <AccountSwitcher
+              current={ctx.account.id}
+              options={ctx.accountMemberships.map((membership) => ({
+                id: membership.accountId,
+                name: membership.account.name,
+              }))}
+            />
+
             <div className="flex flex-col gap-1">
-              <span className="stratum-context-label">Access</span>
-              <span className="stratum-role">{ctx.role}</span>
+              <span className="stratum-context-label">Account Access</span>
+              <span className="stratum-role">{ctx.accountRole}</span>
             </div>
 
             {ctx.user.systemRole === "SUPER_ADMIN" && (
@@ -133,16 +143,25 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <main className="stratum-main">{children}</main>
 
+      <JarvisCopilot
+        organizationId={ctx.organization.id}
+        organizationName={ctx.organization.name}
+        accountId={ctx.account.id}
+        accountName={ctx.account.name}
+      />
+
       <footer className="stratum-titleblock">
         <span>DWG <b>SC-EST-001</b></span>
         <span className="divider">|</span>
         <span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span>
         <span className="divider">|</span>
+        <span>ACCOUNT <b>{ctx.account.name.toUpperCase()}</b></span>
+        <span className="divider">|</span>
         <span>WORKSPACE <b>SERVER-BACKED</b></span>
         <span className="divider">|</span>
-        <span>RBAC <b>{ctx.role}</b></span>
+        <span>RBAC <b>{ctx.accountRole}</b></span>
         <span className="divider">|</span>
-        <span>REV <b>ENTERPRISE MERGE</b></span>
+        <span>REV <b>TENANT-FIRST</b></span>
       </footer>
     </div>
   );

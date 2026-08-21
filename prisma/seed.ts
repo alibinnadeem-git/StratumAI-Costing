@@ -1,6 +1,5 @@
 // Creates one demo organization with an OWNER, ADMIN, and MEMBER user, plus
-// a sample project seeded from the Panel H1 RFI screenshot this app was
-// built around. Run with: npm run db:seed
+// a Main Account tenant and sample project data. Run with: npm run db:seed
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { bootstrapOrganization } from "../src/lib/tenant-bootstrap";
@@ -33,14 +32,20 @@ async function main() {
     });
   }
 
-  await db.$transaction(async (tx) => {
-    await bootstrapOrganization(tx, org.id);
-  });
+  const account = await db.$transaction(async (tx) => bootstrapOrganization(tx, org.id));
+
+  for (let i = 0; i < users.length; i++) {
+    await db.accountMembership.upsert({
+      where: { userId_accountId: { userId: users[i]!.id, accountId: account.id } },
+      update: { role: roles[i]! },
+      create: { userId: users[i]!.id, accountId: account.id, role: roles[i]! },
+    });
+  }
 
   const project = await db.project.upsert({
     where: { id: "seed-project-terawatt" },
-    update: {},
-    create: { id: "seed-project-terawatt", name: "Terawatt — Fremont Service Center", number: "24-118", organizationId: org.id },
+    update: { accountId: account.id, organizationId: org.id },
+    create: { id: "seed-project-terawatt", name: "Terawatt — Fremont Service Center", number: "24-118", organizationId: org.id, accountId: account.id },
   });
 
   await db.rfi.upsert({
@@ -63,13 +68,13 @@ async function main() {
 
   const graybar = await db.supplier.upsert({
     where: { id: "seed-supplier-graybar" },
-    update: {},
-    create: { id: "seed-supplier-graybar", organizationId: org.id, name: "Graybar", contactName: "Jordan Reyes", email: "quotes@graybar-demo.example", categories: ["lighting", "devices"] },
+    update: { accountId: account.id, organizationId: org.id },
+    create: { id: "seed-supplier-graybar", organizationId: org.id, accountId: account.id, name: "Graybar", contactName: "Jordan Reyes", email: "quotes@graybar-demo.example", categories: ["lighting", "devices"] },
   });
   const crescoElectrical = await db.supplier.upsert({
     where: { id: "seed-supplier-cresco" },
-    update: {},
-    create: { id: "seed-supplier-cresco", organizationId: org.id, name: "Cresco Electrical Supply", contactName: "Priya Nair", email: "estimating@cresco-demo.example", categories: ["conduit", "gear"] },
+    update: { accountId: account.id, organizationId: org.id },
+    create: { id: "seed-supplier-cresco", organizationId: org.id, accountId: account.id, name: "Cresco Electrical Supply", contactName: "Priya Nair", email: "estimating@cresco-demo.example", categories: ["conduit", "gear"] },
   });
 
   const takeoff = await db.takeoffImport.upsert({
@@ -103,15 +108,18 @@ async function main() {
       notes: "Deliver to jobsite laydown, coordinate with GC schedule.",
       createdById: users[2]!.id,
       lineItems: {
-        create: takeoff.items.map((it) => ({
-          description: it.description ?? it.subject, quantity: it.count ?? 1, unit: it.unit ?? "EA", takeoffItemId: it.id,
+        create: takeoff.items.map((item) => ({
+          description: item.description ?? item.subject,
+          quantity: item.count ?? 1,
+          unit: item.unit ?? "EA",
+          takeoffItemId: item.id,
         })),
       },
       recipients: { create: [{ supplierId: graybar.id }, { supplierId: crescoElectrical.id }] },
     },
   });
 
-  console.log("Seeded org 'Stratum Electric' with owner/admin/member demo logins.");
+  console.log("Seeded Stratum Electric with Main Account tenant and owner/admin/member demo logins.");
 }
 
 main().finally(() => db.$disconnect());
