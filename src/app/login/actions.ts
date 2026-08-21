@@ -17,15 +17,38 @@ function authFailureMessage(error: unknown) {
     typeof error === "object" && error !== null && "code" in error
       ? String((error as { code?: unknown }).code ?? "")
       : "";
+  const name = error instanceof Error ? error.name : "";
+  const message = error instanceof Error ? error.message : "";
 
-  if (code === "P1000" || code === "P1001" || code === "P1002") {
+  if (
+    code === "P1000" ||
+    code === "P1001" ||
+    code === "P1002" ||
+    name === "PrismaClientInitializationError"
+  ) {
+    if (
+      message.includes("DATABASE_URL") ||
+      message.includes("Environment variable not found") ||
+      message.includes("Invalid datasource")
+    ) {
+      return "Production database configuration is missing or invalid. [DB-CONFIG]";
+    }
     return "Database connection is unavailable. Please try again shortly. [DB-CONNECT]";
   }
+
   if (code === "P2021" || code === "P2022") {
     return "Authentication database schema is not synchronized. [DB-SCHEMA]";
   }
 
-  return "Sign-in is temporarily unavailable. Please try again. [AUTH-RUNTIME]";
+  if (message.includes("bcrypt") || message.includes("Illegal arguments")) {
+    return "Password verification could not be completed. [PASSWORD-VERIFY]";
+  }
+
+  if (message.includes("cookie") || message.includes("Cookies can only be modified")) {
+    return "Secure session creation could not be completed. [SESSION-COOKIE]";
+  }
+
+  return `Sign-in is temporarily unavailable. Please try again. [AUTH-RUNTIME${name ? `:${name}` : ""}]`;
 }
 
 export async function loginAction(
