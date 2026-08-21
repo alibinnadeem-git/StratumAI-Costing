@@ -45,8 +45,8 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee build.log
 
-      - name: Publish diagnostic issue on failure
-        if: steps.install.outcome != 'success' || steps.build.outcome != 'success'
+      - name: Publish build QA result
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,7 +62,7 @@ jobs:
             if [ -f build.log ]; then tail -240 build.log; fi
             echo '```'
           } > build-diagnostic.md
-          gh issue create --title "Build QA failure ${GITHUB_SHA:0:7}" --body-file build-diagnostic.md
+          gh issue create --title "Build QA result ${GITHUB_SHA:0:7}" --body-file build-diagnostic.md
 
       - name: Enforce build success
         if: steps.install.outcome != 'success' || steps.build.outcome != 'success'
