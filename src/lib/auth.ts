@@ -74,8 +74,11 @@ export async function signIn(
   const password = String(options.password ?? "");
   if (!email || !password) return false;
 
-  const user = await db.user.findUnique({ where: { email } });
-  if (!user) return false;
+  const user = await db.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, name: true, passwordHash: true },
+  });
+  if (!user?.passwordHash) return false;
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return false;
