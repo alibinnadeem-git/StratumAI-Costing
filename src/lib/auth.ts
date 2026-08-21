@@ -68,7 +68,7 @@ export async function auth(): Promise<SessionShape | null> {
 
 export async function signIn(
   _provider: "credentials",
-  options: { email?: unknown; password?: unknown }
+  options: { email?: unknown; password?: unknown; redirectTo?: unknown }
 ) {
   const email = String(options.email ?? "").toLowerCase().trim();
   const password = String(options.password ?? "");
