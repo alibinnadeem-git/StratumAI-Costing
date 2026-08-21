@@ -3,7 +3,6 @@
 import { signIn } from "@/lib/auth";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { AuthError } from "next-auth";
 import { bootstrapOrganization } from "@/lib/tenant-bootstrap";
 
 export async function loginAction(_prev: { error?: string } | undefined, formData: FormData) {
@@ -11,14 +10,9 @@ export async function loginAction(_prev: { error?: string } | undefined, formDat
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/dashboard");
 
-  try {
-    await signIn("credentials", { email, password, redirectTo: next || "/dashboard" });
-    return {};
-  } catch (err) {
-    if (err instanceof AuthError) return { error: "Invalid email or password." };
-    // NEXT_REDIRECT throws are how next-auth performs the redirect — rethrow those.
-    throw err;
-  }
+  const ok = await signIn("credentials", { email, password, redirectTo: next || "/dashboard" });
+  if (ok === false) return { error: "Invalid email or password." };
+  return {};
 }
 
 export async function registerOrgAction(
@@ -45,7 +39,6 @@ export async function registerOrgAction(
   await db.$transaction(async (tx) => {
     const user = await tx.user.create({ data: { name, email, passwordHash } });
     const org = await tx.organization.create({ data: { name: orgName, slug } });
-    // First user in a new org is always the OWNER.
     await tx.membership.create({ data: { userId: user.id, organizationId: org.id, role: "OWNER" } });
     await bootstrapOrganization(tx, org.id);
   });
