@@ -68,14 +68,14 @@ export async function auth(): Promise<SessionShape | null> {
 
 export async function signIn(
   _provider: "credentials",
-  options: { email?: unknown; password?: unknown; redirectTo?: unknown }
+  options: { email?: unknown; password?: unknown }
 ) {
   const email = String(options.email ?? "").toLowerCase().trim();
   const password = String(options.password ?? "");
   if (!email || !password) return false;
 
   const user = await db.user.findUnique({ where: { email } });
-  if (!user) return false;
+  if (!user?.passwordHash) return false;
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return false;
@@ -93,7 +93,7 @@ export async function signIn(
     maxAge: SESSION_TTL_SECONDS,
   });
 
-  redirect(sanitizeRedirect(options.redirectTo));
+  return true;
 }
 
 export async function signOut(options?: { redirectTo?: unknown }) {
