@@ -75,7 +75,7 @@ export async function signIn(
   if (!email || !password) return false;
 
   const user = await db.user.findUnique({ where: { email } });
-  if (!user?.passwordHash) return false;
+  if (!user) return false;
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return false;
@@ -93,7 +93,7 @@ export async function signIn(
     maxAge: SESSION_TTL_SECONDS,
   });
 
-  return true;
+  redirect(sanitizeRedirect(options.redirectTo));
 }
 
 export async function signOut(options?: { redirectTo?: unknown }) {
