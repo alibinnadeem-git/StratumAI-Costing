@@ -126,6 +126,7 @@ export default function StratumEdgeRail() {
           <div className="stratum-edge-lifecycle">
             <span>SCAN</span><b>→</b><span>FINDING</span><b>→</b><span>RECOMMEND</span><b>→</b><span>ACTION</span><b>→</b><span className="verified"><BadgeCheck className="h-3 w-3" /> STRATUM Edge Verified</span>
           </div>
+          <p className="!mt-3 !text-[10px]">STRATUM Edge Verified is reserved for reviewed or resolved findings backed by traceable evidence and audit history.</p>
         </div>
       )}
 
