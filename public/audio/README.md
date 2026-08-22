@@ -1,0 +1,1 @@
+Place the user-supplied background soundtrack at `public/audio/stratum-background.mp3`. The application loops this file, provides play/pause and mute controls, and automatically ducks volume while Jarvis speaks.
