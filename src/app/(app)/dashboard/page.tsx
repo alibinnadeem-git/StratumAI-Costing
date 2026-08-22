@@ -43,7 +43,7 @@ export default async function DashboardPage() {
   const continueProject = projects[0];
 
   return <div className="space-y-7">
-    <PageHeader eyebrow={`${ctx.organization.name} → ${ctx.account.name}`} title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}${ctx.user.name ? `, ${ctx.user.name.split(" ")[0]}` : ""}.`} subtitle="You should not need to remember where everything lives. Start with what needs attention, continue your work, or use Quick Find ( / )." />
+    <PageHeader eyebrow={`${ctx.organization.name} → ${ctx.account.name}`} title={`Welcome${ctx.user.name ? `, ${ctx.user.name.split(" ")[0]}` : ""}.`} subtitle="You should not need to remember where everything lives. Start with what needs attention, continue your work, or use Quick Find ( / )." />
 
     <section>
       <div className="mb-2 flex items-center justify-between"><SectionLabel>What needs attention</SectionLabel><span className={`font-mono text-[10px] uppercase ${attentionCount ? "text-[#E0954F]" : "text-[#6FD6C9]"}`}>{attentionCount} item{attentionCount === 1 ? "" : "s"}</span></div>
@@ -62,11 +62,11 @@ export default async function DashboardPage() {
     </section>
 
     <section>
-      <div className="mb-2 flex items-center justify-between"><SectionLabel>Quick start</SectionLabel><button type="button" onClick={undefined} className="hidden" /></div>
+      <div className="mb-2 flex items-center justify-between"><SectionLabel>Quick start</SectionLabel><span className="font-mono text-[9px] uppercase tracking-[.05em] text-[#6D8AA0]">3 common actions</span></div>
       <div className="grid gap-3 md:grid-cols-3">
         {QUICK_START.map((action) => { const Icon = action.icon; return <Link key={action.href} href={action.href}><Card className="group h-full p-4 transition hover:border-[#C97C3D]"><div className="flex items-center justify-between"><Icon className="h-5 w-5 text-[#6FD6C9]"/><Plus className="h-4 w-4 text-signal-600"/></div><div className="mt-4 font-semibold text-slate-800">{action.title}</div><div className="mt-1 text-xs text-slate-500">{action.text}</div></Card></Link>; })}
       </div>
-      <button type="button" className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.05em] text-[#6FD6C9]" onClick={undefined}><Search className="h-3.5 w-3.5"/> Press / anywhere for Quick Find</button>
+      <div className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.05em] text-[#6FD6C9]"><Search className="h-3.5 w-3.5"/> Press / anywhere for Quick Find</div>
     </section>
 
     <section>
