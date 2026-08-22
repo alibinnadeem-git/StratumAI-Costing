@@ -17,7 +17,7 @@ export default async function DashboardPage() {
   const accountId = ctx.account.id;
 
   const [projects, estimates, supplierCount, rfqCount, openRfiCount] = await Promise.all([
-    db.project.findMany({ where: { accountId, archivedAt: null }, include: { _count: { select: { rfis: true, rfqs: true, estimates: true } } }, orderBy: { updatedAt: "desc" }, take: 6 }),
+    db.project.findMany({ where: { accountId, archivedAt: null }, include: { _count: { select: { rfis: true, rfqs: true, estimates: true } } }, orderBy: { createdAt: "desc" }, take: 6 }),
     db.costEstimate.findMany({ where: { accountId, status: { not: "ARCHIVED" } }, include: { lineItems: true, adders: true, project: true }, orderBy: { updatedAt: "desc" }, take: 6 }),
     db.supplier.count({ where: { accountId } }),
     db.rfq.count({ where: { project: { accountId } } }),
