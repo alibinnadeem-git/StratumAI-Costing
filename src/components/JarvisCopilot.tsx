@@ -19,6 +19,14 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
   ]);
   const pathname = useMemo(() => (typeof window !== "undefined" ? window.location.pathname : ""), [open]);
 
+  const quickPrompts = useMemo(() => {
+    if (pathname.startsWith("/projects")) return ["What needs attention in this project?", "Explain the RFI/RFQ workflow", "Which STRATUM Edge tool helps here?"];
+    if (pathname.startsWith("/costing/estimates")) return ["Check this estimate for risks", "Explain this estimate screen", "How can STRATUM Edge improve this estimate?"];
+    if (pathname.startsWith("/suppliers") || pathname.startsWith("/costing/quotes")) return ["What supplier action should I take next?", "Explain bid leveling", "Check procurement risk"];
+    if (pathname.startsWith("/edge")) return ["Which Edge tool should I use?", "Explain STRATUM Edge Verified", "What can STRATUM Edge automate?"];
+    return ["What should I do next?", "Explain this screen", "Which STRATUM Edge tool helps here?"];
+  }, [pathname]);
+
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const synth = window.speechSynthesis;
@@ -26,6 +34,16 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
     warmVoices();
     synth.addEventListener?.("voiceschanged", warmVoices);
     return () => synth.removeEventListener?.("voiceschanged", warmVoices);
+  }, []);
+
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<{ prompt?: string }>).detail;
+      setOpen(true);
+      if (detail?.prompt) setInput(detail.prompt);
+    };
+    window.addEventListener("stratum-jarvis-open", onOpen as EventListener);
+    return () => window.removeEventListener("stratum-jarvis-open", onOpen as EventListener);
   }, []);
 
   function chooseFemaleVoice() {
@@ -61,10 +79,7 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
   }
 
   function toggleVoice() {
-    if (speaking) {
-      stopSpeaking();
-      return;
-    }
+    if (speaking) { stopSpeaking(); return; }
     const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
     setVoiceOn(true);
     if (lastAssistant) speak(lastAssistant.text, true);
@@ -74,14 +89,8 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
     if (typeof window === "undefined") return;
     const w = window as any;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setInput("Voice input is not supported in this browser. Try Chrome or Edge.");
-      return;
-    }
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
+    if (!SpeechRecognition) { setInput("Voice input is not supported in this browser. Try Chrome or Edge."); return; }
+    if (listening) { recognitionRef.current?.stop(); return; }
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.interimResults = true;
@@ -89,11 +98,7 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
     recognition.onstart = () => setListening(true);
     recognition.onend = () => setListening(false);
     recognition.onerror = () => setListening(false);
-    recognition.onresult = (event: any) => {
-      let text = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript;
-      setInput(text.trim());
-    };
+    recognition.onresult = (event: any) => { let text = ""; for (let i = event.resultIndex; i < event.results.length; i++) text += event.results[i][0].transcript; setInput(text.trim()); };
     recognitionRef.current = recognition;
     recognition.start();
   }
@@ -102,9 +107,7 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
     event.preventDefault();
     const message = input.trim();
     if (!message || busy) return;
-    setInput("");
-    setBusy(true);
-    setMessages((current) => [...current, { role: "user", text: message }]);
+    setInput(""); setBusy(true); setMessages((current) => [...current, { role: "user", text: message }]);
     try {
       const response = await fetch("/api/jarvis", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message, pathname, organizationId, accountId }) });
       const data = await response.json().catch(() => ({}));
@@ -113,39 +116,17 @@ export default function JarvisCopilot({ organizationId, organizationName, accoun
       speak(answer);
     } catch {
       const answer = "Jarvis could not reach its guidance service. Please try again.";
-      setMessages((current) => [...current, { role: "assistant", text: answer }]);
-      speak(answer);
-    } finally {
-      setBusy(false);
-    }
+      setMessages((current) => [...current, { role: "assistant", text: answer }]); speak(answer);
+    } finally { setBusy(false); }
   }
 
-  return (
-    <div className="fixed bottom-14 right-4 z-[70] sm:right-[72px]">
-      {open && (
-        <section className="mb-3 flex h-[min(620px,70vh)] w-[min(410px,calc(100vw-2rem))] flex-col overflow-hidden border border-[#C97C3D] bg-[#0E2438] shadow-2xl">
-          <header className="flex items-center justify-between border-b border-[#1C3A57] bg-[#0B1F32] px-4 py-3">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 items-center justify-center border border-[#6FD6C9] text-[#6FD6C9]"><Bot className="h-4 w-4"/></span>
-              <div><div className="font-semibold uppercase tracking-[0.05em] text-[#DCEBF5]">Jarvis</div><div className="font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">{accountName} · {speaking ? "speaking" : "voice ready"}</div></div>
-            </div>
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={toggleVoice} className={`p-1.5 ${speaking ? "text-[#E0954F]" : "text-[#9FB6C7] hover:text-[#6FD6C9]"}`} aria-label={speaking ? "Stop Jarvis voice" : "Speak last Jarvis response"} title={speaking ? "Stop speaking" : "Speak last Jarvis response"}>{speaking ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}</button>
-              <button type="button" onClick={() => { setVoiceOn((v) => !v); if (voiceOn) stopSpeaking(); }} className={`px-1.5 py-1 font-mono text-[8px] uppercase ${voiceOn ? "text-[#6FD6C9]" : "text-[#6D8AA0]"}`} title={voiceOn ? "Automatic Jarvis voice is on" : "Automatic Jarvis voice is off"}>{voiceOn ? "AUTO ON" : "AUTO OFF"}</button>
-              <button onClick={() => setOpen(false)} className="p-1.5 text-[#9FB6C7] hover:text-white" aria-label="Close Jarvis"><X className="h-4 w-4"/></button>
-            </div>
-          </header>
-
-          <div className="border-b border-[#1C3A57] bg-[#081725] px-3 py-2"><div className="flex items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[#6D8AA0]"><span className="flex items-center gap-1"><Database className="h-3 w-3 text-[#6FD6C9]"/>1 Local</span><span>→</span><span className="flex items-center gap-1"><Globe2 className="h-3 w-3 text-[#E0954F]"/>2 Web</span><span>→</span><span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-[#E8B339]"/>3 AI</span></div></div>
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message,index)=><div key={index} className={message.role==="user"?"ml-8":"mr-5"}><div className={message.role==="user"?"border border-[#C97C3D] bg-[#C97C3D]/10 p-3 text-sm text-[#F1D6BF]":"border border-[#1C3A57] bg-[#0A1A2B]/60 p-3 text-sm leading-6 text-[#DCEBF5]"}>{message.text}</div></div>)}{busy&&<div className="mr-5 flex items-center gap-2 border border-[#1C3A57] bg-[#0A1A2B]/60 p-3 font-mono text-[11px] text-[#6FD6C9]"><Loader2 className="h-3.5 w-3.5 animate-spin"/>Checking the authorized account context…</div>}</div>
-          <div className="border-t border-[#1C3A57] p-3">
-            <div className="mb-2 flex flex-wrap gap-1.5">{["What should I do next?","Explain this screen","Which STRATUM Edge tool helps here?"].map(prompt=><button key={prompt} type="button" onClick={()=>setInput(prompt)} className="border border-[#1C3A57] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.04em] text-[#9FB6C7] hover:border-[#6FD6C9] hover:text-[#6FD6C9]">{prompt}</button>)}</div>
-            <form onSubmit={submit} className="flex gap-2"><button type="button" onClick={toggleMic} className={`flex w-11 items-center justify-center border ${listening?"border-[#E0715C] bg-[#E0715C]/10 text-[#E0715C]":"border-[#1C3A57] text-[#6FD6C9] hover:border-[#6FD6C9]"}`} aria-label={listening?"Stop listening":"Speak to Jarvis"}>{listening?<MicOff className="h-4 w-4"/>:<Mic className="h-4 w-4"/>}</button><textarea value={input} onChange={e=>setInput(e.target.value)} rows={2} maxLength={4000} placeholder={listening?"Listening…":"Ask or speak to Jarvis…"} className="min-h-[54px] flex-1 resize-none border border-[#1C3A57] bg-[#0A1A2B] px-3 py-2 text-sm text-[#DCEBF5] outline-none placeholder:text-[#6D8AA0] focus:border-[#C97C3D]"/><button disabled={busy||!input.trim()} className="flex w-11 items-center justify-center border border-[#C97C3D] text-[#E0954F] hover:bg-[#C97C3D] hover:text-[#0A1A2B] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Jarvis"><Send className="h-4 w-4"/></button></form>
-            <p className="mt-2 font-mono text-[9px] leading-4 text-[#6D8AA0]">MIC · Female browser voice · 1.06× rate · speaker replays last response · soundtrack ducks while Jarvis speaks.</p>
-          </div>
-        </section>
-      )}
-      <button onClick={()=>setOpen(v=>!v)} className="group flex items-center gap-2 border border-[#C97C3D] bg-[#0B1F32] px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[#E0954F] shadow-xl transition hover:bg-[#C97C3D] hover:text-[#0A1A2B] max-sm:mb-[52px]">{open?<ChevronDown className="h-4 w-4"/>:<Sparkles className="h-4 w-4"/>}Jarvis</button>
-    </div>
-  );
+  return <div className="fixed bottom-14 right-4 z-[70] sm:right-[72px]">
+    {open && <section className="mb-3 flex h-[min(620px,70vh)] w-[min(410px,calc(100vw-2rem))] flex-col overflow-hidden border border-[#C97C3D] bg-[#0E2438] shadow-2xl">
+      <header className="flex items-center justify-between border-b border-[#1C3A57] bg-[#0B1F32] px-4 py-3"><div className="flex items-center gap-2.5"><span className="flex h-8 w-8 items-center justify-center border border-[#6FD6C9] text-[#6FD6C9]"><Bot className="h-4 w-4"/></span><div><div className="font-semibold uppercase tracking-[0.05em] text-[#DCEBF5]">Jarvis</div><div className="font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">{accountName} · {speaking ? "speaking" : "context ready"}</div></div></div><div className="flex items-center gap-1"><button type="button" onClick={toggleVoice} className={`p-1.5 ${speaking ? "text-[#E0954F]" : "text-[#9FB6C7] hover:text-[#6FD6C9]"}`} aria-label={speaking ? "Stop Jarvis voice" : "Speak last Jarvis response"}>{speaking ? <VolumeX className="h-4 w-4"/> : <Volume2 className="h-4 w-4"/>}</button><button type="button" onClick={() => { setVoiceOn((v) => !v); if (voiceOn) stopSpeaking(); }} className={`px-1.5 py-1 font-mono text-[8px] uppercase ${voiceOn ? "text-[#6FD6C9]" : "text-[#6D8AA0]"}`}>{voiceOn ? "AUTO ON" : "AUTO OFF"}</button><button onClick={() => setOpen(false)} className="p-1.5 text-[#9FB6C7] hover:text-white" aria-label="Close Jarvis"><X className="h-4 w-4"/></button></div></header>
+      <div className="border-b border-[#1C3A57] bg-[#081725] px-3 py-2"><div className="flex items-center justify-between gap-2 font-mono text-[8px] uppercase tracking-[0.05em] text-[#6D8AA0]"><span className="flex items-center gap-1"><Database className="h-3 w-3 text-[#6FD6C9]"/>1 Local</span><span>→</span><span className="flex items-center gap-1"><Globe2 className="h-3 w-3 text-[#E0954F]"/>2 Web</span><span>→</span><span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-[#E8B339]"/>3 AI</span></div></div>
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">{messages.map((message,index)=><div key={index} className={message.role==="user"?"ml-8":"mr-5"}><div className={message.role==="user"?"border border-[#C97C3D] bg-[#C97C3D]/10 p-3 text-sm text-[#F1D6BF]":"border border-[#1C3A57] bg-[#0A1A2B]/60 p-3 text-sm leading-6 text-[#DCEBF5]"}>{message.text}</div></div>)}{busy&&<div className="mr-5 flex items-center gap-2 border border-[#1C3A57] bg-[#0A1A2B]/60 p-3 font-mono text-[11px] text-[#6FD6C9]"><Loader2 className="h-3.5 w-3.5 animate-spin"/>Checking the authorized account context…</div>}</div>
+      <div className="border-t border-[#1C3A57] p-3"><div className="mb-2 flex flex-wrap gap-1.5">{quickPrompts.map(prompt=><button key={prompt} type="button" onClick={()=>setInput(prompt)} className="border border-[#1C3A57] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.04em] text-[#9FB6C7] hover:border-[#6FD6C9] hover:text-[#6FD6C9]">{prompt}</button>)}</div><form onSubmit={submit} className="flex gap-2"><button type="button" onClick={toggleMic} className={`flex w-11 items-center justify-center border ${listening?"border-[#E0715C] bg-[#E0715C]/10 text-[#E0715C]":"border-[#1C3A57] text-[#6FD6C9] hover:border-[#6FD6C9]"}`} aria-label={listening?"Stop listening":"Speak to Jarvis"}>{listening?<MicOff className="h-4 w-4"/>:<Mic className="h-4 w-4"/>}</button><textarea value={input} onChange={e=>setInput(e.target.value)} rows={2} maxLength={4000} placeholder={listening?"Listening…":"Ask or speak to Jarvis…"} className="min-h-[54px] flex-1 resize-none border border-[#1C3A57] bg-[#0A1A2B] px-3 py-2 text-sm text-[#DCEBF5] outline-none placeholder:text-[#6D8AA0] focus:border-[#C97C3D]"/><button disabled={busy||!input.trim()} className="flex w-11 items-center justify-center border border-[#C97C3D] text-[#E0954F] hover:bg-[#C97C3D] hover:text-[#0A1A2B] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send to Jarvis"><Send className="h-4 w-4"/></button></form><p className="mt-2 font-mono text-[9px] leading-4 text-[#6D8AA0]">CONTEXTUAL GUIDANCE · Local account data first · Quick Find can open Jarvis directly.</p></div>
+    </section>}
+    <button onClick={()=>setOpen(v=>!v)} className="group flex items-center gap-2 border border-[#C97C3D] bg-[#0B1F32] px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[#E0954F] shadow-xl transition hover:bg-[#C97C3D] hover:text-[#0A1A2B] max-sm:mb-[52px]">{open?<ChevronDown className="h-4 w-4"/>:<Sparkles className="h-4 w-4"/>}Jarvis</button>
+  </div>;
 }

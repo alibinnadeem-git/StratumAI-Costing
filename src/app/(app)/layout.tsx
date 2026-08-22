@@ -20,6 +20,7 @@ import { atLeast } from "@/lib/rbac";
 import JarvisCopilot from "@/components/JarvisCopilot";
 import StratumEdgeRail from "@/components/StratumEdgeRail";
 import StratumAudioController from "@/components/StratumAudioController";
+import StratumCommandPalette from "@/components/StratumCommandPalette";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
 import AccountSwitcher from "./AccountSwitcher";
@@ -84,42 +85,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="flex min-w-max items-center">
                 {PRIMARY_NAV.map((item) => {
                   const Icon = item.icon;
-                  return (
-                    <Link key={item.href} href={item.href} className="stratum-tab">
-                      <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-                      {item.label}
-                    </Link>
-                  );
+                  return <Link key={item.href} href={item.href} className="stratum-tab"><Icon className="h-3.5 w-3.5" strokeWidth={1.8} />{item.label}</Link>;
                 })}
               </div>
             </div>
-
             <details className="group relative z-[60] shrink-0 border-l border-[#1C3A57] bg-[#0B1F32]">
-              <summary className="stratum-tab cursor-pointer list-none select-none whitespace-nowrap">
-                <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
-                More
-              </summary>
+              <summary className="stratum-tab cursor-pointer list-none select-none whitespace-nowrap"><ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />More</summary>
               <div className="absolute right-0 top-full z-[70] mt-px w-72 border border-[#1C3A57] bg-[#0B1F32] p-2 shadow-2xl">
                 <div className="px-2 pb-2 pt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">More tools</div>
-                {MORE_TOOLS.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link key={item.href} href={item.href} className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]">
-                      <Icon className="h-3.5 w-3.5" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
-                <Link href="/organizations" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Organizations & Accounts
-                </Link>
-                {isAdmin && (
-                  <Link href="/admin" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Admin
-                  </Link>
-                )}
+                {MORE_TOOLS.map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Icon className="h-3.5 w-3.5" />{item.label}</Link>; })}
+                <Link href="/organizations" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Building2 className="h-3.5 w-3.5" />Organizations & Accounts</Link>
+                {isAdmin && <Link href="/admin" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><ShieldCheck className="h-3.5 w-3.5" />Admin</Link>}
               </div>
             </details>
           </nav>
@@ -127,7 +103,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
         <div className="border-b border-[#1C3A57] bg-[#081725] px-4 py-2 sm:px-7">
           <div className="mx-auto flex max-w-[1224px] flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-[#6D8AA0]">
-            <span><b className="text-[#6FD6C9]">Not sure what to do?</b> Start at Home or ask Jarvis.</span>
+            <span><b className="text-[#6FD6C9]">Keep it simple:</b> Home tells you what needs attention. Press <b className="text-[#E0954F]">/</b> to go anywhere, or ask Jarvis.</span>
             <span className="text-[#9FB6C7]">{ctx.organization.name} → {ctx.account.name} · {ctx.accountRole}</span>
           </div>
         </div>
@@ -137,6 +113,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <StratumEdgeRail />
       <JarvisCopilot organizationId={ctx.organization.id} organizationName={ctx.organization.name} accountId={ctx.account.id} accountName={ctx.account.name} />
       <StratumAudioController />
+      <StratumCommandPalette isAdmin={isAdmin} />
 
       <footer className="stratum-titleblock">
         <span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span><span className="divider">|</span>
