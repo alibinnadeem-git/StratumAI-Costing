@@ -18,6 +18,7 @@ import {
 import { requireTenantContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
 import JarvisCopilot from "@/components/JarvisCopilot";
+import StratumEdgeRail from "@/components/StratumEdgeRail";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
 import AccountSwitcher from "./AccountSwitcher";
@@ -45,6 +46,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="stratum-workspace">
+      <div className="stratum-ambient-orb stratum-ambient-orb-a" aria-hidden="true" />
+      <div className="stratum-ambient-orb stratum-ambient-orb-b" aria-hidden="true" />
+      <div className="stratum-scanline" aria-hidden="true" />
+
       <header className="stratum-shell sticky top-0 z-40">
         <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-7">
           <Link href="/dashboard" className="group flex min-w-0 items-center gap-3">
@@ -108,14 +113,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </header>
 
-      <main className="stratum-main">{children}</main>
+      <main className="stratum-main stratum-reveal">{children}</main>
 
+      <StratumEdgeRail />
       <JarvisCopilot organizationId={ctx.organization.id} organizationName={ctx.organization.name} accountId={ctx.account.id} accountName={ctx.account.name} />
 
       <footer className="stratum-titleblock">
         <span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span><span className="divider">|</span>
         <span>ACCOUNT <b>{ctx.account.name.toUpperCase()}</b></span><span className="divider">|</span>
-        <span>ACCESS <b>{ctx.accountRole}</b></span>
+        <span>ACCESS <b>{ctx.accountRole}</b></span><span className="divider">|</span>
+        <span>INTELLIGENCE <b>STRATUM EDGE</b></span>
       </footer>
     </div>
   );
