@@ -106,7 +106,7 @@ export default function JarvisCopilot({
         </section>
       )}
 
-      <button onClick={() => setOpen((value) => !value)} className="group flex items-center gap-2 border border-[#C97C3D] bg-[#0B1F32] px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[#E0954F] shadow-xl transition hover:bg-[#C97C3D] hover:text-[#0A1A2B]">
+      <button onClick={() => setOpen((value) => !value)} className="group flex items-center gap-2 border border-[#C97C3D] bg-[#0B1F32] px-4 py-2.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[#E0954F] shadow-xl transition hover:bg-[#C97C3D] hover:text-[#0A1A2B] max-sm:mb-[52px]">
         {open ? <ChevronDown className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
         Jarvis
       </button>
