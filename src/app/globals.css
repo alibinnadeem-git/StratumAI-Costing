@@ -41,7 +41,10 @@ html, body { height: 100%; }
   --stratum-amber: #E8B339;
   --stratum-danger: #E0715C;
   --stratum-good: #7FCB9B;
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
+  overflow-x: clip;
   color: var(--stratum-ink);
   background-color: var(--stratum-bg-deep);
   background-image:
@@ -51,6 +54,50 @@ html, body { height: 100%; }
   padding-bottom: 46px;
 }
 
+.stratum-workspace::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -3;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(111,214,201,.06), transparent 26%),
+    radial-gradient(circle at 80% 68%, rgba(201,124,61,.055), transparent 30%),
+    linear-gradient(115deg, transparent 0 42%, rgba(111,214,201,.018) 50%, transparent 58%);
+  animation: stratum-grid-breathe 14s ease-in-out infinite alternate;
+}
+
+.stratum-ambient-orb {
+  position: fixed;
+  z-index: -2;
+  width: 32vw;
+  height: 32vw;
+  min-width: 280px;
+  min-height: 280px;
+  border-radius: 999px;
+  filter: blur(78px);
+  opacity: .12;
+  pointer-events: none;
+  transform: translate3d(0,0,0);
+}
+.stratum-ambient-orb-a { top: 8vh; left: -12vw; background: var(--stratum-cyan); animation: stratum-orbit-a 18s ease-in-out infinite alternate; }
+.stratum-ambient-orb-b { right: -12vw; bottom: 8vh; background: var(--stratum-copper); animation: stratum-orbit-b 20s ease-in-out infinite alternate; }
+
+.stratum-scanline {
+  position: fixed;
+  z-index: 1;
+  top: -16vh;
+  right: 0;
+  left: 0;
+  height: 14vh;
+  pointer-events: none;
+  opacity: .13;
+  background: linear-gradient(to bottom, transparent, rgba(111,214,201,.18), rgba(111,214,201,.035), transparent);
+  animation: stratum-scan 12s linear infinite;
+}
+
+.stratum-reveal { animation: stratum-reveal .5s cubic-bezier(.22,.85,.35,1) both; }
+
 .stratum-workspace ::selection {
   background: var(--stratum-copper);
   color: var(--stratum-bg-deep);
@@ -58,8 +105,9 @@ html, body { height: 100%; }
 
 .stratum-workspace .stratum-shell {
   border-bottom: 1px solid var(--stratum-grid-line);
-  background: rgba(10, 26, 43, 0.96);
+  background: rgba(10, 26, 43, 0.94);
   backdrop-filter: blur(18px);
+  box-shadow: 0 14px 60px rgba(3,10,18,.22);
 }
 
 .stratum-workspace .stratum-brand-mark {
@@ -74,6 +122,8 @@ html, body { height: 100%; }
   border-radius: 999px;
   color: var(--stratum-copper-bright);
   font-weight: 800;
+  box-shadow: 0 0 0 0 rgba(201,124,61,.22);
+  animation: stratum-pulse 4.8s ease-out infinite;
 }
 
 .stratum-workspace .stratum-brand-mark::before,
@@ -104,12 +154,13 @@ html, body { height: 100%; }
   font-size: 11px;
   letter-spacing: .055em;
   text-transform: uppercase;
-  transition: color .14s ease, background .14s ease, border-color .14s ease;
+  transition: color .14s ease, background .14s ease, border-color .14s ease, transform .14s ease;
 }
 .stratum-workspace .stratum-tab:hover {
   color: var(--stratum-ink);
   background: rgba(111,214,201,.035);
   border-bottom-color: var(--stratum-copper);
+  transform: translateY(-1px);
 }
 .stratum-workspace .stratum-tab-index { color: var(--stratum-copper); opacity: .78; }
 
@@ -143,7 +194,129 @@ html, body { height: 100%; }
   letter-spacing: .07em;
 }
 
-.stratum-workspace .stratum-main { max-width: 1280px; margin: 0 auto; padding: 24px 28px; }
+.stratum-workspace .stratum-main { max-width: 1280px; margin: 0 auto; padding: 24px 76px 24px 28px; }
+
+/* STRATUM Edge intelligence rail */
+.stratum-edge-rail {
+  position: fixed;
+  z-index: 65;
+  top: 50%;
+  right: 12px;
+  display: flex;
+  width: 48px;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  transform: translateY(-50%);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.stratum-edge-brand,
+.stratum-edge-tool {
+  position: relative;
+  display: flex;
+  width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--stratum-grid-line);
+  background: rgba(7,22,36,.94);
+  color: var(--stratum-ink-mute);
+  backdrop-filter: blur(14px);
+  transition: border-color .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.stratum-edge-brand {
+  flex-direction: column;
+  gap: 1px;
+  border-color: rgba(201,124,61,.85);
+  color: var(--stratum-copper-bright);
+  font-size: 7px;
+  letter-spacing: .08em;
+  box-shadow: 0 0 24px rgba(201,124,61,.08);
+}
+.stratum-edge-brand:hover { transform: translateX(-3px); box-shadow: 0 0 28px rgba(201,124,61,.18); }
+
+.stratum-edge-tools { display: flex; flex-direction: column; gap: 6px; }
+.stratum-edge-tool-wrap { position: relative; }
+.stratum-edge-tool { flex-direction: column; gap: 2px; }
+.stratum-edge-tool:hover,
+.stratum-edge-tool:focus,
+.stratum-edge-tool.is-relevant {
+  border-color: rgba(111,214,201,.72);
+  color: var(--stratum-cyan);
+  background: rgba(9,31,47,.97);
+  box-shadow: inset 0 0 18px rgba(111,214,201,.045), 0 0 20px rgba(111,214,201,.06);
+}
+.stratum-edge-tool:hover,
+.stratum-edge-tool:focus { transform: translateX(-4px); }
+.stratum-edge-tool-label { font-size: 6.5px; letter-spacing: .04em; text-transform: uppercase; }
+.stratum-edge-pip {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--stratum-cyan);
+  box-shadow: 0 0 8px var(--stratum-cyan);
+  animation: stratum-pip 2.3s ease-in-out infinite;
+}
+
+.stratum-edge-balloon,
+.stratum-edge-intro {
+  position: absolute;
+  right: 55px;
+  width: min(340px, calc(100vw - 92px));
+  border: 1px solid var(--stratum-copper);
+  background: rgba(8,24,39,.985);
+  color: var(--stratum-ink);
+  box-shadow: 0 24px 70px rgba(0,0,0,.42), inset 0 0 32px rgba(111,214,201,.018);
+  backdrop-filter: blur(18px);
+}
+
+.stratum-edge-balloon {
+  top: 50%;
+  padding: 14px;
+  transform: translateY(-50%);
+  animation: stratum-edge-balloon .18s ease-out both;
+}
+.stratum-edge-balloon::after,
+.stratum-edge-intro::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  width: 12px;
+  height: 12px;
+  rotate: 45deg;
+  border-top: 1px solid var(--stratum-copper);
+  border-right: 1px solid var(--stratum-copper);
+  background: #081827;
+}
+.stratum-edge-balloon::after { top: calc(50% - 6px); }
+.stratum-edge-balloon-kicker,
+.stratum-edge-kicker { color: var(--stratum-copper-bright); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+.stratum-edge-balloon-title,
+.stratum-edge-intro-title { margin-top: 4px; color: var(--stratum-ink); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 15px; font-weight: 700; }
+.stratum-edge-balloon p,
+.stratum-edge-intro p { margin-top: 8px; color: var(--stratum-ink-dim); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 12px; line-height: 1.55; }
+.stratum-edge-gap { margin-top: 10px; border-left: 2px solid var(--stratum-cyan); padding-left: 9px; color: var(--stratum-ink-dim); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 11px; line-height: 1.5; }
+.stratum-edge-gap b { color: var(--stratum-cyan); }
+.stratum-edge-open { display: inline-flex; margin-top: 12px; color: var(--stratum-copper-bright); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.stratum-edge-open:hover { color: #F3B77F; }
+
+.stratum-edge-intro {
+  top: 0;
+  right: 55px;
+  padding: 16px;
+  animation: stratum-edge-intro .22s ease-out both;
+}
+.stratum-edge-intro::after { top: 16px; }
+.stratum-edge-close { position: absolute; top: 8px; right: 8px; color: var(--stratum-ink-mute); }
+.stratum-edge-close:hover { color: var(--stratum-ink); }
+.stratum-edge-lifecycle { margin-top: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; color: var(--stratum-ink-mute); font-size: 7px; letter-spacing: .05em; }
+.stratum-edge-lifecycle b { color: var(--stratum-grid-line); }
+.stratum-edge-lifecycle .verified { display: inline-flex; align-items: center; gap: 3px; color: var(--stratum-cyan); }
 
 /* Re-skin the existing React feature pages without changing their server-backed behavior. */
 .stratum-workspace .bg-white,
@@ -223,9 +396,96 @@ html, body { height: 100%; }
 .stratum-workspace .stratum-titleblock b { color: var(--stratum-copper-bright); font-weight: 500; }
 .stratum-workspace .stratum-titleblock .divider { color: var(--stratum-grid-line); }
 
+@keyframes stratum-grid-breathe {
+  0% { opacity: .74; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.012); }
+}
+@keyframes stratum-orbit-a {
+  from { transform: translate3d(0,0,0) scale(.92); }
+  to { transform: translate3d(14vw,10vh,0) scale(1.08); }
+}
+@keyframes stratum-orbit-b {
+  from { transform: translate3d(0,0,0) scale(1); }
+  to { transform: translate3d(-10vw,-8vh,0) scale(.9); }
+}
+@keyframes stratum-scan {
+  from { transform: translateY(-18vh); }
+  to { transform: translateY(128vh); }
+}
+@keyframes stratum-reveal {
+  from { opacity: 0; transform: translateY(8px); filter: blur(3px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes stratum-pulse {
+  0%, 78%, 100% { box-shadow: 0 0 0 0 rgba(201,124,61,.18); }
+  84% { box-shadow: 0 0 0 8px rgba(201,124,61,0); }
+}
+@keyframes stratum-pip {
+  0%,100% { opacity: .45; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+@keyframes stratum-edge-balloon {
+  from { opacity: 0; transform: translate(8px,-50%) scale(.985); }
+  to { opacity: 1; transform: translate(0,-50%) scale(1); }
+}
+@keyframes stratum-edge-intro {
+  from { opacity: 0; transform: translateX(8px) scale(.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stratum-workspace *,
+  .stratum-workspace *::before,
+  .stratum-workspace *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+
 @media (max-width: 760px) {
-  .stratum-workspace { padding-bottom: 60px; }
-  .stratum-workspace .stratum-main { padding: 18px 14px; }
+  .stratum-workspace { padding-bottom: 104px; }
+  .stratum-workspace .stratum-main { padding: 18px 14px 24px; }
   .stratum-workspace .stratum-tab { padding-inline: 10px; font-size: 10px; }
   .stratum-workspace .stratum-titleblock { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; }
+
+  .stratum-edge-rail {
+    top: auto;
+    right: 8px;
+    bottom: 48px;
+    left: 8px;
+    width: auto;
+    flex-direction: row;
+    justify-content: flex-end;
+    transform: none;
+    pointer-events: none;
+  }
+  .stratum-edge-brand,
+  .stratum-edge-tools { pointer-events: auto; }
+  .stratum-edge-tools {
+    max-width: calc(100vw - 76px);
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 2px;
+    scrollbar-width: none;
+  }
+  .stratum-edge-tools::-webkit-scrollbar { display: none; }
+  .stratum-edge-tool,
+  .stratum-edge-brand { width: 40px; min-height: 40px; flex: 0 0 40px; }
+  .stratum-edge-balloon,
+  .stratum-edge-intro {
+    position: fixed;
+    right: 12px;
+    bottom: 100px;
+    left: 12px;
+    top: auto;
+    width: auto;
+    transform: none;
+  }
+  .stratum-edge-balloon { animation: stratum-mobile-balloon .18s ease-out both; }
+  .stratum-edge-intro { animation: stratum-mobile-balloon .2s ease-out both; }
+  .stratum-edge-balloon::after,
+  .stratum-edge-intro::after { display: none; }
+}
+
+@keyframes stratum-mobile-balloon {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
