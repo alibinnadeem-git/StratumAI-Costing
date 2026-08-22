@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Calculator, ClipboardList, FolderOpen, Plus, ReceiptText, ShoppingCart } from "lucide-react";
+import { Calculator, ClipboardList, FolderOpen, Plus, Radar, ReceiptText, ScanSearch, ShoppingCart, Sparkles } from "lucide-react";
 import { requireTenantContext } from "@/lib/session";
 import { db } from "@/lib/db";
 import { calculateEstimate, money } from "@/lib/costing";
@@ -66,6 +66,28 @@ export default async function DashboardPage() {
       </section>
 
       <section>
+        <SectionLabel>STRATUM Edge</SectionLabel>
+        <Card className="mt-2 overflow-hidden border-[#C97C3D] bg-[#081827]">
+          <div className="grid gap-0 lg:grid-cols-[1.1fr_.9fr]">
+            <div className="p-5">
+              <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.1em] text-[#E0954F]"><Sparkles className="h-4 w-4" /> Intelligence beyond the drawing</div>
+              <h2 className="mt-3 text-xl font-semibold text-[#DCEBF5]">The right-side rail is your quick access to STRATUM Edge.</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9FB6C7]">Revision impact, scope gaps, estimate health, bid leveling, procurement risk, historical benchmarking and progress intelligence stay available without crowding the main navigation. Hover or tap any Edge icon to see the gap it covers and open the relevant workspace.</p>
+              <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[8px] uppercase tracking-[0.06em] text-[#6D8AA0]"><span>SCAN</span><span>→</span><span>FINDING</span><span>→</span><span>RECOMMENDATION</span><span>→</span><span>ACTION</span><span>→</span><span className="text-[#6FD6C9]">STRATUM Edge Verified</span></div>
+            </div>
+            <div className="relative min-h-[150px] overflow-hidden border-t border-[#1C3A57] bg-[#0B1F32] p-5 lg:border-l lg:border-t-0">
+              <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(#1C3A57_1px,transparent_1px),linear-gradient(90deg,#1C3A57_1px,transparent_1px)] [background-size:24px_24px]" />
+              <div className="relative grid grid-cols-3 gap-3">
+                <div className="border border-[#1C3A57] bg-[#081725]/90 p-3 text-center"><Radar className="mx-auto h-5 w-5 text-[#6FD6C9]"/><div className="mt-2 font-mono text-[8px] uppercase text-[#9FB6C7]">Revision</div></div>
+                <div className="border border-[#1C3A57] bg-[#081725]/90 p-3 text-center"><ScanSearch className="mx-auto h-5 w-5 text-[#E0954F]"/><div className="mt-2 font-mono text-[8px] uppercase text-[#9FB6C7]">Scope</div></div>
+                <div className="border border-[#1C3A57] bg-[#081725]/90 p-3 text-center"><Sparkles className="mx-auto h-5 w-5 text-[#E8B339]"/><div className="mt-2 font-mono text-[8px] uppercase text-[#9FB6C7]">Jarvis</div></div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      <section>
         <SectionLabel>At a glance</SectionLabel>
         <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="Active projects" value={projects.length} icon={<FolderOpen className="h-5 w-5" />} />
@@ -105,7 +127,7 @@ export default async function DashboardPage() {
 
       <Card className="border-[#1C3A57] bg-[#0B1F32] p-4 text-[#DCEBF5]">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div><div className="font-semibold">Need help deciding?</div><div className="mt-1 text-sm text-[#9FB6C7]">Jarvis can guide you through the software. It checks your account data first, then external research when needed, then uses AI to explain or recommend.</div></div>
+          <div><div className="font-semibold">Need help deciding?</div><div className="mt-1 text-sm text-[#9FB6C7]">Jarvis can guide you through the software. The product principle is local account data first, external research second when needed, then AI synthesis and recommendations.</div></div>
           <span className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.08em] text-[#6FD6C9]">Jarvis · bottom right</span>
         </div>
       </Card>
