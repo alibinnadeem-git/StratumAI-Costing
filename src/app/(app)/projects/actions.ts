@@ -15,12 +15,7 @@ export async function createProjectAction(formData: FormData) {
   if (!name) return;
 
   const project = await db.project.create({
-    data: {
-      name,
-      number,
-      organizationId: ctx.organization.id,
-      accountId: ctx.account.id,
-    },
+    data: { name, number, organizationId: ctx.organization.id, accountId: ctx.account.id },
   });
   await logAction({
     organizationId: ctx.organization.id,
@@ -59,16 +54,8 @@ export async function archiveProjectAction(projectId: string) {
   const ctx = await requireAccountRole("ADMIN");
   const project = await db.project.findFirst({ where: { id: projectId, accountId: ctx.account.id } });
   if (!project) return;
-
   await db.project.update({ where: { id: projectId }, data: { archivedAt: new Date() } });
-  await logAction({
-    organizationId: ctx.organization.id,
-    accountId: ctx.account.id,
-    userId: ctx.user.id,
-    projectId,
-    action: "project.archive",
-    detail: `Archived project "${project.name}"`,
-  });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId, action: "project.archive", detail: `Archived project "${project.name}"` });
   revalidatePath("/projects");
 }
 
@@ -76,24 +63,15 @@ export async function restoreProjectAction(projectId: string) {
   const ctx = await requireAccountRole("ADMIN");
   const project = await db.project.findFirst({ where: { id: projectId, accountId: ctx.account.id } });
   if (!project) return;
-
   await db.project.update({ where: { id: project.id }, data: { archivedAt: null } });
-  await logAction({
-    organizationId: ctx.organization.id,
-    accountId: ctx.account.id,
-    userId: ctx.user.id,
-    projectId: project.id,
-    action: "project.restore",
-    detail: `Restored project "${project.name}"`,
-  });
+  await logAction({ organizationId: ctx.organization.id, accountId: ctx.account.id, userId: ctx.user.id, projectId: project.id, action: "project.restore", detail: `Restored project "${project.name}"` });
   revalidatePath("/projects");
 }
 
 export async function deleteProjectAction(projectId: string) {
-  const ctx = await requireAccountRole("OWNER");
+  const ctx = await requireAccountRole("ADMIN");
   const project = await db.project.findFirst({ where: { id: projectId, accountId: ctx.account.id } });
   if (!project) return;
-
   await logAction({
     organizationId: ctx.organization.id,
     accountId: ctx.account.id,

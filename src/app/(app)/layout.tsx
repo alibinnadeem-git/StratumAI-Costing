@@ -1,129 +1,15 @@
 import Link from "next/link";
-import {
-  BarChart3,
-  BookOpenCheck,
-  Boxes,
-  Building2,
-  ChevronDown,
-  ClipboardList,
-  FolderKanban,
-  Gauge,
-  Home,
-  ReceiptText,
-  Settings2,
-  ShieldCheck,
-  ShoppingCart,
-  Truck,
-} from "lucide-react";
+import { BarChart3, BookOpenCheck, Boxes, Building2, ChevronDown, ClipboardList, FolderKanban, Gauge, Home, ReceiptText, Settings2, ShieldCheck, ShoppingCart, Truck } from "lucide-react";
 import { requireTenantContext } from "@/lib/session";
 import { atLeast } from "@/lib/rbac";
 import JarvisCopilot from "@/components/JarvisCopilot";
 import StratumEdgeRail from "@/components/StratumEdgeRail";
+import StratumAudioController from "@/components/StratumAudioController";
 import { signOutAction } from "./actions";
 import OrgSwitcher from "./OrgSwitcher";
 import AccountSwitcher from "./AccountSwitcher";
 
-const PRIMARY_NAV = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/costing/estimates", label: "Estimates", icon: ReceiptText },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/costing/items", label: "Cost Library", icon: Boxes },
-  { href: "/suppliers", label: "Suppliers", icon: Truck },
-];
+const PRIMARY_NAV=[{href:"/dashboard",label:"Home",icon:Home},{href:"/costing/estimates",label:"Estimates",icon:ReceiptText},{href:"/projects",label:"Projects",icon:FolderKanban},{href:"/costing/items",label:"Cost Library",icon:Boxes},{href:"/suppliers",label:"Suppliers",icon:Truck},{href:"/edge",label:"STRATUM Edge",icon:Gauge}];
+const MORE_TOOLS=[{href:"/costing/job-costs",label:"Job Costs",icon:ClipboardList},{href:"/costing/quotes",label:"Supplier Quotes",icon:ShoppingCart},{href:"/costing",label:"Analytics",icon:BarChart3},{href:"/costing/market",label:"Market Intelligence",icon:Gauge},{href:"/costing/neca",label:"NECA Labor",icon:BookOpenCheck},{href:"/costing/settings",label:"Costing Settings",icon:Settings2}];
 
-const MORE_TOOLS = [
-  { href: "/costing/job-costs", label: "Job Costs", icon: ClipboardList },
-  { href: "/costing/quotes", label: "Supplier Quotes", icon: ShoppingCart },
-  { href: "/costing", label: "Analytics", icon: BarChart3 },
-  { href: "/costing/market", label: "Market Intelligence", icon: Gauge },
-  { href: "/costing/neca", label: "NECA Labor", icon: BookOpenCheck },
-  { href: "/costing/settings", label: "Costing Settings", icon: Settings2 },
-];
-
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const ctx = await requireTenantContext();
-  const isAdmin = atLeast(ctx.accountRole, "ADMIN");
-
-  return (
-    <div className="stratum-workspace">
-      <div className="stratum-ambient-orb stratum-ambient-orb-a" aria-hidden="true" />
-      <div className="stratum-ambient-orb stratum-ambient-orb-b" aria-hidden="true" />
-      <div className="stratum-scanline" aria-hidden="true" />
-
-      <header className="stratum-shell sticky top-0 z-40">
-        <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-7">
-          <Link href="/dashboard" className="group flex min-w-0 items-center gap-3">
-            <span className="stratum-brand-mark"><span className="relative z-10 text-sm">S</span></span>
-            <span className="min-w-0">
-              <span className="block truncate text-[17px] font-bold uppercase tracking-[0.04em] text-[#DCEBF5]">Stratum AI Costing</span>
-              <span className="mt-0.5 block truncate font-mono text-[9px] uppercase tracking-[0.06em] text-[#6D8AA0]">Estimate · Buy · Track · Learn</span>
-            </span>
-          </Link>
-
-          <div className="flex flex-wrap items-end justify-end gap-3">
-            {ctx.memberships.length > 1 ? (
-              <OrgSwitcher current={ctx.organization.id} options={ctx.memberships.map((m) => ({ id: m.organizationId, name: m.organization.name }))} />
-            ) : (
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="stratum-context-label">Organization</span>
-                <span className="max-w-[190px] truncate font-mono text-[11px] text-[#DCEBF5]">{ctx.organization.name}</span>
-              </div>
-            )}
-            <AccountSwitcher current={ctx.account.id} options={ctx.accountMemberships.map((m) => ({ id: m.accountId, name: m.account.name }))} />
-            <form action={signOutAction} className="pb-0.5">
-              <button className="border border-[#1C3A57] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9FB6C7] transition hover:border-[#C97C3D] hover:text-[#E0954F]">Sign out</button>
-            </form>
-          </div>
-        </div>
-
-        <div className="stratum-tabs overflow-x-auto">
-          <nav className="mx-auto flex min-w-max max-w-[1280px] items-center px-3 sm:px-7" aria-label="Primary workspace navigation">
-            {PRIMARY_NAV.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link key={item.href} href={item.href} className="stratum-tab">
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  {item.label}
-                </Link>
-              );
-            })}
-            <details className="group relative">
-              <summary className="stratum-tab cursor-pointer list-none select-none">
-                <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
-                More
-              </summary>
-              <div className="absolute right-0 top-full z-50 mt-px w-64 border border-[#1C3A57] bg-[#0B1F32] p-2 shadow-2xl">
-                <div className="px-2 pb-2 pt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">More tools</div>
-                {MORE_TOOLS.map((item) => {
-                  const Icon = item.icon;
-                  return <Link key={item.href} href={item.href} className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Icon className="h-3.5 w-3.5" />{item.label}</Link>;
-                })}
-                <Link href="/organizations" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Building2 className="h-3.5 w-3.5" />Organizations & Accounts</Link>
-                {isAdmin && <Link href="/admin" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><ShieldCheck className="h-3.5 w-3.5" />Admin</Link>}
-              </div>
-            </details>
-          </nav>
-        </div>
-
-        <div className="border-b border-[#1C3A57] bg-[#081725] px-4 py-2 sm:px-7">
-          <div className="mx-auto flex max-w-[1224px] flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-[#6D8AA0]">
-            <span><b className="text-[#6FD6C9]">Not sure what to do?</b> Start at Home. Jarvis is always available at the bottom-right.</span>
-            <span className="text-[#9FB6C7]">{ctx.organization.name} → {ctx.account.name} · {ctx.accountRole}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="stratum-main stratum-reveal">{children}</main>
-
-      <StratumEdgeRail />
-      <JarvisCopilot organizationId={ctx.organization.id} organizationName={ctx.organization.name} accountId={ctx.account.id} accountName={ctx.account.name} />
-
-      <footer className="stratum-titleblock">
-        <span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span><span className="divider">|</span>
-        <span>ACCOUNT <b>{ctx.account.name.toUpperCase()}</b></span><span className="divider">|</span>
-        <span>ACCESS <b>{ctx.accountRole}</b></span><span className="divider">|</span>
-        <span>INTELLIGENCE <b>STRATUM EDGE</b></span>
-      </footer>
-    </div>
-  );
-}
+export default async function AppLayout({children}:{children:React.ReactNode}){const ctx=await requireTenantContext();const isAdmin=atLeast(ctx.accountRole,"ADMIN");return <div className="stratum-workspace"><div className="stratum-ambient-orb stratum-ambient-orb-a" aria-hidden="true"/><div className="stratum-ambient-orb stratum-ambient-orb-b" aria-hidden="true"/><div className="stratum-scanline" aria-hidden="true"/><header className="stratum-shell sticky top-0 z-40"><div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-7"><Link href="/dashboard" className="group flex min-w-0 items-center gap-3"><span className="stratum-brand-mark"><span className="relative z-10 text-sm">S</span></span><span className="min-w-0"><span className="block truncate text-[17px] font-bold uppercase tracking-[0.04em] text-[#DCEBF5]">Stratum AI Costing</span><span className="mt-0.5 block truncate font-mono text-[9px] uppercase tracking-[0.06em] text-[#6D8AA0]">Estimate · Buy · Track · Learn</span></span></Link><div className="flex flex-wrap items-end justify-end gap-3">{ctx.memberships.length>1?<OrgSwitcher current={ctx.organization.id} options={ctx.memberships.map(m=>({id:m.organizationId,name:m.organization.name}))}/>:<div className="flex min-w-0 flex-col gap-1"><span className="stratum-context-label">Organization</span><span className="max-w-[190px] truncate font-mono text-[11px] text-[#DCEBF5]">{ctx.organization.name}</span></div>}<AccountSwitcher current={ctx.account.id} options={ctx.accountMemberships.map(m=>({id:m.accountId,name:m.account.name}))}/><form action={signOutAction} className="pb-0.5"><button className="border border-[#1C3A57] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#9FB6C7] transition hover:border-[#C97C3D] hover:text-[#E0954F]">Sign out</button></form></div></div><div className="stratum-tabs overflow-x-auto"><nav className="mx-auto flex min-w-max max-w-[1280px] items-center px-3 sm:px-7" aria-label="Primary workspace navigation">{PRIMARY_NAV.map(item=>{const Icon=item.icon;return <Link key={item.href} href={item.href} className="stratum-tab"><Icon className="h-3.5 w-3.5" strokeWidth={1.8}/>{item.label}</Link>})}<details className="group relative"><summary className="stratum-tab cursor-pointer list-none select-none"><ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180"/>More</summary><div className="absolute right-0 top-full z-50 mt-px w-64 border border-[#1C3A57] bg-[#0B1F32] p-2 shadow-2xl"><div className="px-2 pb-2 pt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-[#6D8AA0]">More tools</div>{MORE_TOOLS.map(item=>{const Icon=item.icon;return <Link key={item.href} href={item.href} className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Icon className="h-3.5 w-3.5"/>{item.label}</Link>})}<Link href="/organizations" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><Building2 className="h-3.5 w-3.5"/>Organizations & Accounts</Link>{isAdmin&&<Link href="/admin" className="flex items-center gap-2 border-t border-[#1C3A57]/60 px-2 py-2.5 text-xs text-[#B7CAD8] hover:bg-[#102A42] hover:text-[#6FD6C9]"><ShieldCheck className="h-3.5 w-3.5"/>Admin</Link>}</div></details></nav></div><div className="border-b border-[#1C3A57] bg-[#081725] px-4 py-2 sm:px-7"><div className="mx-auto flex max-w-[1224px] flex-wrap items-center justify-between gap-2 font-mono text-[10px] text-[#6D8AA0]"><span><b className="text-[#6FD6C9]">Not sure what to do?</b> Start at Home or ask Jarvis.</span><span className="text-[#9FB6C7]">{ctx.organization.name} → {ctx.account.name} · {ctx.accountRole}</span></div></div></header><main className="stratum-main stratum-reveal">{children}</main><StratumEdgeRail/><JarvisCopilot organizationId={ctx.organization.id} organizationName={ctx.organization.name} accountId={ctx.account.id} accountName={ctx.account.name}/><StratumAudioController/><footer className="stratum-titleblock"><span>ORG <b>{ctx.organization.name.toUpperCase()}</b></span><span className="divider">|</span><span>ACCOUNT <b>{ctx.account.name.toUpperCase()}</b></span><span className="divider">|</span><span>ACCESS <b>{ctx.accountRole}</b></span><span className="divider">|</span><span>INTELLIGENCE <b>STRATUM EDGE</b></span></footer></div>}
