@@ -309,7 +309,7 @@ html, body { height: 100%; }
   top: 0;
   right: 55px;
   padding: 16px;
-  animation: stratum-edge-balloon .22s ease-out both;
+  animation: stratum-edge-intro .22s ease-out both;
 }
 .stratum-edge-intro::after { top: 16px; }
 .stratum-edge-close { position: absolute; top: 8px; right: 8px; color: var(--stratum-ink-mute); }
@@ -427,6 +427,10 @@ html, body { height: 100%; }
 @keyframes stratum-edge-balloon {
   from { opacity: 0; transform: translate(8px,-50%) scale(.985); }
   to { opacity: 1; transform: translate(0,-50%) scale(1); }
+}
+@keyframes stratum-edge-intro {
+  from { opacity: 0; transform: translateX(8px) scale(.985); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
