@@ -4,7 +4,14 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
-import { ACCOUNT_COOKIE, ORG_COOKIE, getMemberships, requireRole, requireTenantContext } from "@/lib/session";
+import {
+  ACCOUNT_COOKIE,
+  ORG_COOKIE,
+  getAccountMemberships,
+  getMemberships,
+  requireRole,
+  requireTenantContext,
+} from "@/lib/session";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import { bootstrapOrganization } from "@/lib/tenant-bootstrap";
@@ -21,21 +28,49 @@ const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-
 export async function switchOrgAction(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+
   const orgId = String(formData.get("organizationId") ?? "");
   const memberships = await getMemberships(session.user.id);
-  if (!memberships.some((membership) => membership.organizationId === orgId)) return;
+  const membership = memberships.find((item) => item.organizationId === orgId);
+  if (!membership) throw new Error("Forbidden: organization membership is required.");
+
+  const accountMemberships = await getAccountMemberships(session.user.id, orgId);
   const cookieStore = await cookies();
   cookieStore.set(ORG_COOKIE, orgId, cookieOptions);
-  cookieStore.delete(ACCOUNT_COOKIE);
-  redirect("/costing/items");
+  if (accountMemberships[0]) {
+    cookieStore.set(ACCOUNT_COOKIE, accountMemberships[0].accountId, cookieOptions);
+  } else {
+    cookieStore.delete(ACCOUNT_COOKIE);
+  }
+
+  await logAction({
+    organizationId: orgId,
+    accountId: accountMemberships[0]?.accountId,
+    userId: session.user.id,
+    action: "organization.switch",
+    detail: `Switched active organization to ${membership.organization.name}`,
+  });
+
+  redirect(accountMemberships[0] ? "/costing/items" : "/organizations");
 }
 
 export async function switchAccountAction(formData: FormData) {
   const ctx = await requireTenantContext();
   const accountId = String(formData.get("accountId") ?? "");
-  if (!ctx.accountMemberships.some((membership) => membership.accountId === accountId)) return;
+  const membership = ctx.accountMemberships.find((item) => item.accountId === accountId);
+  if (!membership) throw new Error("Forbidden: account/tenant membership is required.");
+
   const cookieStore = await cookies();
   cookieStore.set(ACCOUNT_COOKIE, accountId, cookieOptions);
+
+  await logAction({
+    organizationId: ctx.organization.id,
+    accountId,
+    userId: ctx.user.id,
+    action: "account.switch",
+    detail: `Switched active account/tenant to ${membership.account.name}`,
+  });
+
   redirect("/costing/items");
 }
 
@@ -47,7 +82,7 @@ export async function createOrganizationAction(formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  if (!name) throw new Error("Organization name is required.");
 
   const base = slugify(name);
   let slug = base;
@@ -72,7 +107,7 @@ export async function createOrganizationAction(formData: FormData) {
 export async function createAccountAction(formData: FormData) {
   const ctx = await requireRole("ADMIN");
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  if (!name) throw new Error("Account name is required.");
 
   const base = slugify(name);
   let slug = base;
