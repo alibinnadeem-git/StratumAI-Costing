@@ -1,5 +1,4 @@
 import "server-only";
-import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -58,7 +57,10 @@ export async function getMemberships(userId: string) {
   });
 }
 
-async function loadAccountMemberships(userId: string, organizationId: string): Promise<AccountMembershipSummary[]> {
+export async function getAccountMemberships(
+  userId: string,
+  organizationId: string,
+): Promise<AccountMembershipSummary[]> {
   const rows = await db.$queryRaw<AccountMembershipRow[]>`
     SELECT
       am."id" AS "membershipId",
@@ -91,51 +93,6 @@ async function loadAccountMemberships(userId: string, organizationId: string): P
   }));
 }
 
-async function ensureMainAccountMembership(
-  userId: string,
-  organizationId: string,
-  role: Role,
-): Promise<AccountMembershipSummary[]> {
-  let accounts = await loadAccountMemberships(userId, organizationId);
-  if (accounts.length > 0) return accounts;
-
-  const existing = await db.$queryRaw<AccountSummary[]>`
-    SELECT "id", "name", "slug", "organizationId"
-    FROM "Account"
-    WHERE "organizationId" = ${organizationId}
-      AND "slug" = 'main'
-    LIMIT 1
-  `;
-
-  const accountId = existing[0]?.id ?? `acct_${randomUUID().replaceAll("-", "")}`;
-  if (!existing[0]) {
-    await db.$executeRaw`
-      INSERT INTO "Account" ("id", "name", "slug", "organizationId", "createdAt")
-      VALUES (${accountId}, 'Main Account', 'main', ${organizationId}, CURRENT_TIMESTAMP)
-      ON CONFLICT ("organizationId", "slug") DO NOTHING
-    `;
-  }
-
-  const resolved = await db.$queryRaw<AccountSummary[]>`
-    SELECT "id", "name", "slug", "organizationId"
-    FROM "Account"
-    WHERE "organizationId" = ${organizationId}
-      AND "slug" = 'main'
-    LIMIT 1
-  `;
-  const resolvedAccountId = resolved[0]?.id;
-  if (!resolvedAccountId) throw new Error("Unable to initialize tenant account.");
-
-  await db.$executeRaw`
-    INSERT INTO "AccountMembership" ("id", "role", "createdAt", "userId", "accountId")
-    VALUES (${`am_${randomUUID().replaceAll("-", "")}`}, CAST(${role} AS "Role"), CURRENT_TIMESTAMP, ${userId}, ${resolvedAccountId})
-    ON CONFLICT ("userId", "accountId") DO NOTHING
-  `;
-
-  accounts = await loadAccountMemberships(userId, organizationId);
-  return accounts;
-}
-
 export async function requireOrgContext(): Promise<ActiveOrgContext> {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -165,12 +122,14 @@ export async function requireOrgContext(): Promise<ActiveOrgContext> {
 
 export async function requireTenantContext(): Promise<ActiveTenantContext> {
   const orgContext = await requireOrgContext();
-  const accountMemberships = await ensureMainAccountMembership(
+  const accountMemberships = await getAccountMemberships(
     orgContext.user.id,
     orgContext.organization.id,
-    orgContext.role,
   );
-  if (accountMemberships.length === 0) throw new Error("No account/tenant membership is available for this organization.");
+
+  // Account membership is an explicit authorization boundary. Reading a tenant
+  // context must never create or elevate membership as a side effect.
+  if (accountMemberships.length === 0) redirect("/organizations");
 
   const cookieStore = await cookies();
   const preferredAccountId = cookieStore.get(ACCOUNT_COOKIE)?.value;
