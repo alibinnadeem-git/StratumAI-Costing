@@ -1,0 +1,18 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { db } from "@/lib/db";
+import { logAction } from "@/lib/audit";
+import { requireAccountRole } from "@/lib/session";
+import { addPlanRoomRevision, associatePlanRoomDocument, createPlanRoomDocument, createPlanRoomFolder } from "@/lib/plan-room";
+
+async function requireProject(projectId:string, accountId:string){ const project=await db.project.findFirst({where:{id:projectId,accountId}}); if(!project) throw new Error("Project not found in this account."); return project; }
+const s=(fd:FormData,k:string)=>String(fd.get(k)??"").trim();
+
+export async function createFolderAction(projectId:string, formData:FormData){ const ctx=await requireAccountRole("MEMBER"); await requireProject(projectId,ctx.account.id); const name=s(formData,"name"); if(!name) throw new Error("Folder name is required."); await createPlanRoomFolder({projectId,accountId:ctx.account.id,parentId:s(formData,"parentId")||null,name,createdById:ctx.user.id}); await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"plan_room.folder.create",detail:`Created folder ${name}`}); revalidatePath(`/projects/${projectId}/plan-room`); }
+
+export async function registerDocumentAction(projectId:string, formData:FormData){ const ctx=await requireAccountRole("MEMBER"); await requireProject(projectId,ctx.account.id); const name=s(formData,"name"); if(!name) throw new Error("Document name is required."); const id=await createPlanRoomDocument({projectId,accountId:ctx.account.id,folderId:s(formData,"folderId")||null,name,documentType:s(formData,"documentType")||"GENERAL",externalUrl:s(formData,"externalUrl")||null,mimeType:s(formData,"mimeType")||null,description:s(formData,"description")||null,createdById:ctx.user.id}); await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"plan_room.document.register",detail:`Registered ${name} (${id})`}); revalidatePath(`/projects/${projectId}/plan-room`); }
+
+export async function addDocumentRevisionAction(projectId:string, formData:FormData){ const ctx=await requireAccountRole("MEMBER"); await requireProject(projectId,ctx.account.id); const documentId=s(formData,"documentId"); const revision=s(formData,"revision"); if(!documentId||!revision) throw new Error("Document and revision are required."); await addPlanRoomRevision({documentId,accountId:ctx.account.id,revision,externalUrl:s(formData,"externalUrl")||null,changeSummary:s(formData,"changeSummary")||null,issuedAt:s(formData,"issuedAt")?new Date(`${s(formData,"issuedAt")}T12:00:00`):null,createdById:ctx.user.id}); await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"plan_room.revision.add",detail:`Added document revision ${revision}`}); revalidatePath(`/projects/${projectId}/plan-room`); }
+
+export async function associateDocumentAction(projectId:string, formData:FormData){ const ctx=await requireAccountRole("MEMBER"); await requireProject(projectId,ctx.account.id); const documentId=s(formData,"documentId"); const entityType=s(formData,"entityType"); const entityId=s(formData,"entityId"); if(!documentId||!entityType||!entityId) throw new Error("Document, entity type and entity ID are required."); await associatePlanRoomDocument({documentId,accountId:ctx.account.id,entityType,entityId,label:s(formData,"label")||null}); await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"plan_room.document.associate",detail:`Associated document to ${entityType}:${entityId}`}); revalidatePath(`/projects/${projectId}/plan-room`); }
