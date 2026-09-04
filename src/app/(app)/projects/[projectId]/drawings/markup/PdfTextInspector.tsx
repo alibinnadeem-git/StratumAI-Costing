@@ -15,10 +15,11 @@ type Extracted = {
 };
 type TextToken = { text: string; x: number; y: number };
 type Region={x1:number;y1:number;x2:number;y2:number;label:string};
+type PresetKey="LOWER_RIGHT"|"LOWER_FULL"|"LOWER_LEFT"|"RIGHT_FULL"|"FULL";
 type Props = {projectId:string;revisionId:string;url:string|null;pageNumber:number;registeredSheetNumber:string;registeredRevision:string;registeredSheetTitle:string|null;};
 
 const PDF_WORKER_SRC = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-const PRESETS:Record<string,Region>={
+const PRESETS:Record<PresetKey,Region>={
   LOWER_RIGHT:{x1:.45,y1:0,x2:1,y2:.38,label:"Lower-right title block"},
   LOWER_FULL:{x1:0,y1:0,x2:1,y2:.32,label:"Full-width lower band"},
   LOWER_LEFT:{x1:0,y1:0,x2:.55,y2:.38,label:"Lower-left title block"},
@@ -34,7 +35,7 @@ export default function PdfTextInspector({projectId,revisionId,url,pageNumber,re
   const router=useRouter();const[pending,startTransition]=useTransition();const[result,setResult]=useState<Extracted|null>(null);const[state,setState]=useState<"IDLE"|"LOADING"|"READY"|"ERROR">("IDLE");const[error,setError]=useState<string|null>(null);const[sheetNumber,setSheetNumber]=useState(registeredSheetNumber);const[revision,setRevision]=useState(registeredRevision);const[sheetTitle,setSheetTitle]=useState(registeredSheetTitle??"");const[preset,setPreset]=useState("LOWER_RIGHT");const[region,setRegion]=useState<Region>(PRESETS.LOWER_RIGHT);
   const candidates=useMemo(()=>result?[result.sheetNumber,result.revision,result.sheetTitle].filter(Boolean).length:0,[result]);
   const mismatchCount=result?Number(!!result.sheetNumber&&normalizeLine(result.sheetNumber).toLowerCase()!==normalizeLine(registeredSheetNumber).toLowerCase())+Number(!!result.revision&&normalizeLine(result.revision).toLowerCase()!==normalizeLine(registeredRevision).toLowerCase())+Number(!!result.sheetTitle&&normalizeLine(result.sheetTitle).toLowerCase()!==normalizeLine(registeredSheetTitle??"").toLowerCase()):0;
-  function choosePreset(value:string){setPreset(value);const next=PRESETS[value];if(next)setRegion(next);setResult(null);setState("IDLE");}
+  function choosePreset(value:string){setPreset(value);if(value!=="CUSTOM"&&value in PRESETS)setRegion(PRESETS[value as PresetKey]);setResult(null);setState("IDLE");}
   function changeRegion(key:"x1"|"y1"|"x2"|"y2",percent:number){const value=Math.max(0,Math.min(1,percent/100));setPreset("CUSTOM");setRegion(current=>({...current,[key]:value,label:"Custom region"}));setResult(null);setState("IDLE");}
   function normalizedRegion(){return{x1:Math.min(region.x1,region.x2),y1:Math.min(region.y1,region.y2),x2:Math.max(region.x1,region.x2),y2:Math.max(region.y1,region.y2),label:region.label};}
   async function extract(){if(!url)return;setState("LOADING");setError(null);try{const pdfjs=await import("pdfjs-dist");pdfjs.GlobalWorkerOptions.workerSrc=PDF_WORKER_SRC;const task=pdfjs.getDocument({url});const pdf=await task.promise;const page=await pdf.getPage(Math.min(Math.max(1,pageNumber),pdf.numPages));const viewport=page.getViewport({scale:1});const content=await page.getTextContent();const tokens:TextToken[]=content.items.flatMap(item=>{if(!("str" in item)||typeof item.str!=="string"||!item.str.trim())return[];const transform="transform" in item&&Array.isArray(item.transform)?item.transform:null;if(!transform||transform.length<6)return[];return[{text:item.str.trim(),x:Number(transform[4])||0,y:Number(transform[5])||0}];});const fullText=groupLines(tokens);const r=normalizedRegion();const titleBlockTokens=tokens.filter(token=>{const nx=viewport.width?token.x/viewport.width:0;const ny=viewport.height?token.y/viewport.height:0;return nx>=r.x1&&nx<=r.x2&&ny>=r.y1&&ny<=r.y2;});const titleBlockText=groupLines(titleBlockTokens);const inferred=infer(titleBlockText.length?titleBlockText:fullText);const next={...inferred,titleBlockText,fullText,pageWidth:viewport.width,pageHeight:viewport.height};setResult(next);if(next.sheetNumber)setSheetNumber(next.sheetNumber);if(next.revision)setRevision(next.revision);if(next.sheetTitle)setSheetTitle(next.sheetTitle);setState("READY");await task.destroy();}catch(e){setState("ERROR");setError(e instanceof Error?e.message:"Text extraction failed.");}}
