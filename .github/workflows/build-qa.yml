@@ -38,9 +38,18 @@ jobs:
           set -o pipefail
           npm install --no-audit --no-fund 2>&1 | tee install.log
 
+      - name: Security regression guards
+        id: security
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:security 2>&1 | tee security.log
+
       - name: Build
         id: build
-        if: steps.install.outcome == 'success'
+        if: steps.install.outcome == 'success' && steps.security.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
@@ -57,15 +66,17 @@ jobs:
             echo "Automated build diagnostic for commit \`${GITHUB_SHA}\`."
             echo
             echo "Install outcome: **${{ steps.install.outcome }}**"
+            echo "Security regression outcome: **${{ steps.security.outcome }}**"
             echo "Build outcome: **${{ steps.build.outcome }}**"
             echo
             echo '```text'
             if [ -f install.log ]; then tail -120 install.log; fi
+            if [ -f security.log ]; then tail -180 security.log; fi
             if [ -f build.log ]; then tail -240 build.log; fi
             echo '```'
           } > build-diagnostic.md
           gh issue create --title "Build QA result ${GITHUB_SHA:0:7}" --body-file build-diagnostic.md
 
       - name: Enforce build success
-        if: steps.install.outcome != 'success' || steps.build.outcome != 'success'
+        if: steps.install.outcome != 'success' || steps.security.outcome != 'success' || steps.build.outcome != 'success'
         run: exit 1
