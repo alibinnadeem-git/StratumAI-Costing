@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
@@ -25,7 +26,7 @@ export async function createEstimateRevisionAction(formData: FormData) {
       _max: { number: true },
     });
 
-    return tx.costEstimate.create({
+    const created = await tx.costEstimate.create({
       data: {
         organizationId: ctx.organization.id,
         accountId: ctx.account.id,
@@ -69,6 +70,13 @@ export async function createEstimateRevisionAction(formData: FormData) {
         },
       },
     });
+
+    await tx.$executeRaw`
+      INSERT INTO "EstimateRevisionLink" ("id", "accountId", "parentEstimateId", "childEstimateId", "createdById", "createdAt")
+      VALUES (${`rev_${randomUUID().replaceAll("-", "")}`}, ${ctx.account.id}, ${source.id}, ${created.id}, ${ctx.user.id}, CURRENT_TIMESTAMP)
+    `;
+
+    return created;
   });
 
   await logAction({
@@ -80,5 +88,5 @@ export async function createEstimateRevisionAction(formData: FormData) {
     detail: `Created EST-${String(revision.number).padStart(4, "0")} as a draft revision of EST-${String(source.number).padStart(4, "0")}`,
   });
 
-  redirect(`/costing/estimates/${revision.id}`);
+  redirect(`/costing/estimates/${revision.id}/compare`);
 }
