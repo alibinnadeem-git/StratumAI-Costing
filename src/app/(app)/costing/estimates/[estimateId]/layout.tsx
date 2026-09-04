@@ -14,6 +14,7 @@ export default async function EstimateLayout({ children, params }: { children: R
   const controlled = !!estimate && CONTROLLED.has(estimate.status);
 
   return <div className={controlled ? "controlled-estimate" : undefined}>
+    {estimate && <div className="mb-3 flex flex-wrap items-center justify-end gap-2"><Link href={`/costing/estimates/${estimate.id}`} className="btn-secondary">Estimate</Link><Link href={`/costing/estimates/${estimate.id}/health`} className="btn-secondary">Health</Link><Link href={`/costing/estimates/${estimate.id}/spatial`} className="btn-secondary">Spatial Trace</Link></div>}
     {controlled && <>
       <style>{`
         .controlled-estimate form:not(.allow-controlled-action) input,
