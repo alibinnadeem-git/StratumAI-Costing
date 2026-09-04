@@ -2,23 +2,191 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type Point={x:number;y:number};
-export type Geometry=
-  |{type:"Point";x:number;y:number}
-  |{type:"Arrow"|"Rectangle"|"Cloud";x1:number;y1:number;x2:number;y2:number}
-  |{type:"Polygon"|"Freehand";points:Point[]}
-  |{type:"Text";x:number;y:number};
-type Mark={id:string;title:string;geometry:Geometry;selected:boolean};
+export type Point = { x: number; y: number };
+export type Geometry =
+  | { type: "Point"; x: number; y: number }
+  | { type: "Arrow" | "Rectangle" | "Cloud"; x1: number; y1: number; x2: number; y2: number }
+  | { type: "Polygon" | "Freehand"; points: Point[] }
+  | { type: "Text"; x: number; y: number };
 
-function normalized(e:React.PointerEvent<HTMLDivElement>|React.MouseEvent<HTMLDivElement>,el:HTMLDivElement){const r=el.getBoundingClientRect();return{x:Math.min(1,Math.max(0,(e.clientX-r.left)/r.width)),y:Math.min(1,Math.max(0,(e.clientY-r.top)/r.height))};}
+type Mark = { id: string; title: string; geometry: Geometry; selected: boolean };
 
-export default function PdfPageSurface({url,pageNumber,interactive,onPoint,marks,onSelect,draft,start,freehandMode=false,onFreehand}:{url:string|null;pageNumber:number;interactive:boolean;onPoint:(p:Point)=>void;marks:Mark[];onSelect:(id:string)=>void;draft:Geometry|null;start:Point|null;freehandMode?:boolean;onFreehand?:(points:Point[])=>void}){
-  const canvasRef=useRef<HTMLCanvasElement|null>(null);const drawingRef=useRef<Point[]>([]);const [drawing,setDrawing]=useState<Point[]>([]);const [state,setState]=useState<"LOADING"|"READY"|"FALLBACK"|"EMPTY">(url?"LOADING":"EMPTY");const [error,setError]=useState<string|null>(null);const [zoom,setZoom]=useState(1);const [rotation,setRotation]=useState<0|90|180|270>(0);const [size,setSize]=useState({width:1000,height:1000});
-  useEffect(()=>{if(!url){setState("EMPTY");return;}let cancelled=false;let task:{destroy?:()=>void}|null=null;(async()=>{try{setState("LOADING");const pdfjs=await import("pdfjs-dist");pdfjs.GlobalWorkerOptions.workerSrc="https://unpkg.com/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs";const loading=pdfjs.getDocument({url});task=loading;const pdf=await loading.promise;const page=await pdf.getPage(Math.min(Math.max(1,pageNumber),pdf.numPages));const base=page.getViewport({scale:1,rotation});const host=canvasRef.current?.parentElement?.parentElement;const target=Math.max(640,host?.clientWidth||1200);const viewport=page.getViewport({scale:(target/base.width)*zoom,rotation});const canvas=canvasRef.current;if(!canvas||cancelled)return;const ratio=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);canvas.style.width=`${viewport.width}px`;canvas.style.height=`${viewport.height}px`;setSize({width:viewport.width,height:viewport.height});const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Canvas context unavailable.");await page.render({canvas,canvasContext:ctx,viewport,transform:ratio===1?undefined:[ratio,0,0,ratio,0,0]}).promise;if(!cancelled){setState("READY");setError(null);}}catch(e){if(!cancelled){setState("FALLBACK");setError(e instanceof Error?e.message:"PDF render failed.");}}})();return()=>{cancelled=true;task?.destroy?.();};},[url,pageNumber,zoom,rotation]);
-  function click(e:React.MouseEvent<HTMLDivElement>){if(!interactive||freehandMode)return;onPoint(normalized(e,e.currentTarget));}
-  function down(e:React.PointerEvent<HTMLDivElement>){if(!interactive||!freehandMode)return;e.currentTarget.setPointerCapture(e.pointerId);const p=normalized(e,e.currentTarget);drawingRef.current=[p];setDrawing([p]);}
-  function move(e:React.PointerEvent<HTMLDivElement>){if(!interactive||!freehandMode||!drawingRef.current.length)return;const p=normalized(e,e.currentTarget);const last=drawingRef.current.at(-1)!;if(Math.hypot(p.x-last.x,p.y-last.y)<.002)return;drawingRef.current=[...drawingRef.current,p];setDrawing(drawingRef.current);}
-  function up(e:React.PointerEvent<HTMLDivElement>){if(!interactive||!freehandMode||!drawingRef.current.length)return;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);const pts=drawingRef.current;drawingRef.current=[];setDrawing([]);if(pts.length>=2)onFreehand?.(pts);}
-  const live:Geometry|null=drawing.length>=2?{type:"Freehand",points:drawing}:null;const all=[...marks.map(m=>({key:m.id,g:m.geometry,selected:m.selected,title:m.title,id:m.id})),...(draft?[{key:"draft",g:draft,selected:true,title:"Draft",id:null as string|null}]:[]),...(live?[{key:"live",g:live,selected:true,title:"Freehand",id:null as string|null}]:[]),...(start?[{key:"start",g:{type:"Point",x:start.x,y:start.y} as Geometry,selected:true,title:"Start",id:null as string|null}]:[])];
-  return <div className="space-y-2"><div className="flex flex-wrap items-center gap-2"><button type="button" className="btn-secondary" onClick={()=>setZoom(z=>Math.max(.5,Number((z-.25).toFixed(2))))}>− Zoom</button><span className="tag REF">{Math.round(zoom*100)}%</span><button type="button" className="btn-secondary" onClick={()=>setZoom(z=>Math.min(4,Number((z+.25).toFixed(2))))}>+ Zoom</button><button type="button" className="btn-secondary" onClick={()=>setZoom(1)}>Fit</button><button type="button" className="btn-secondary" onClick={()=>setRotation(r=>((r+90)%360) as 0|90|180|270)}>Rotate 90°</button><span className="cat">{rotation}°</span></div>{state==="FALLBACK"&&url&&<div className="border border-[#6A5521] bg-[#211B0D] p-2 text-xs text-[#F0D98A]">PDF.js could not read this source directly{error?`: ${error}`:""}. Browser fallback remains available below.</div>}<div className="max-h-[76vh] min-h-[560px] overflow-auto border border-[#1C3A57] bg-[#07131D] p-2">{state==="FALLBACK"&&url?<iframe src={`${url}#page=${pageNumber}`} title="Drawing PDF fallback" className="h-[72vh] w-full bg-white" style={{pointerEvents:interactive?"none":"auto"}}/>:<div className="relative touch-none bg-white" style={{width:size.width,height:size.height}} onClick={click} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}><canvas ref={canvasRef} className="absolute inset-0 block max-w-none"/><svg className={`absolute inset-0 h-full w-full ${interactive?freehandMode?"cursor-crosshair":"cursor-crosshair":"pointer-events-none"}`} viewBox="0 0 1000 1000" preserveAspectRatio="none">{all.map(m=>{const g=m.g;const stroke=m.selected?"#0E7490":"#D97706";const common={onClick:(e:React.MouseEvent)=>{if(m.id){e.stopPropagation();onSelect(m.id);}},className:m.id?"pointer-events-auto cursor-pointer":""};if(g.type==="Point")return <g key={m.key} {...common}><circle cx={g.x*1000} cy={g.y*1000} r="10" fill="#F59E0B" stroke="#07131D" strokeWidth="4"/><title>{m.title}</title></g>;if(g.type==="Text")return <g key={m.key} {...common}><rect x={g.x*1000-8} y={g.y*1000-18} width="160" height="28" fill="#FFF7D6" stroke={stroke} strokeWidth="3"/><text x={g.x*1000} y={g.y*1000} fontSize="18" fill="#111827">{m.title}</text></g>;if(g.type==="Polygon"||g.type==="Freehand"){const pts=g.points.map(p=>`${p.x*1000},${p.y*1000}`).join(" ");return <g key={m.key} {...common}>{g.type==="Polygon"?<polygon points={pts} fill="rgba(217,119,6,.08)" stroke={stroke} strokeWidth="6"/>:<polyline points={pts} fill="none" stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>}<title>{m.title}</title></g>;}const x1=g.x1*1000,y1=g.y1*1000,x2=g.x2*1000,y2=g.y2*1000;if(g.type==="Arrow")return <g key={m.key} {...common}><defs><marker id={`arrow-${m.key}`} markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill={stroke}/></marker></defs><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth="6" markerEnd={`url(#arrow-${m.key})`}/><title>{m.title}</title></g>;const x=Math.min(x1,x2),y=Math.min(y1,y2),w=Math.abs(x2-x1),h=Math.abs(y2-y1);return <g key={m.key} {...common}><rect x={x} y={y} width={w} height={h} fill="none" stroke={stroke} strokeWidth="6" strokeDasharray={g.type==="Cloud"?"18 10":"0"} rx={g.type==="Cloud"?18:0}/><title>{m.title}</title></g>;})}</svg>{state==="LOADING"&&<div className="absolute inset-0 grid place-items-center bg-white/70 text-sm text-slate-600">Rendering PDF page…</div>}{state==="EMPTY"&&<div className="absolute inset-0 grid place-items-center text-sm text-slate-500">No source PDF URL registered.</div>}</div>}</div><div className="cat">PDF.js page {pageNumber} · zoom {Math.round(zoom*100)}% · rotation {rotation}° · normalized markup coordinates · {state}</div></div>;
+type Props = {
+  url: string | null;
+  pageNumber: number;
+  interactive: boolean;
+  onPoint: (p: Point) => void;
+  marks: Mark[];
+  onSelect: (id: string) => void;
+  draft: Geometry | null;
+  start: Point | null;
+  freehandMode?: boolean;
+  onFreehand?: (points: Point[]) => void;
+  initialRotation?: 0 | 90 | 180 | 270;
+};
+
+function normalized(e: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, el: HTMLDivElement) {
+  const r = el.getBoundingClientRect();
+  return {
+    x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+    y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+  };
+}
+
+export default function PdfPageSurface({
+  url,
+  pageNumber,
+  interactive,
+  onPoint,
+  marks,
+  onSelect,
+  draft,
+  start,
+  freehandMode = false,
+  onFreehand,
+  initialRotation = 0,
+}: Props) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef<Point[]>([]);
+  const [drawing, setDrawing] = useState<Point[]>([]);
+  const [state, setState] = useState<"LOADING" | "READY" | "FALLBACK" | "EMPTY">(url ? "LOADING" : "EMPTY");
+  const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(initialRotation);
+  const [size, setSize] = useState({ width: 1000, height: 1000 });
+
+  useEffect(() => setRotation(initialRotation), [initialRotation]);
+
+  useEffect(() => {
+    if (!url) {
+      setState("EMPTY");
+      return;
+    }
+    let cancelled = false;
+    let task: { destroy?: () => void } | null = null;
+    (async () => {
+      try {
+        setState("LOADING");
+        const pdfjs = await import("pdfjs-dist");
+        pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs";
+        const loading = pdfjs.getDocument({ url });
+        task = loading;
+        const pdf = await loading.promise;
+        const page = await pdf.getPage(Math.min(Math.max(1, pageNumber), pdf.numPages));
+        const base = page.getViewport({ scale: 1, rotation });
+        const host = canvasRef.current?.parentElement?.parentElement;
+        const target = Math.max(640, host?.clientWidth || 1200);
+        const viewport = page.getViewport({ scale: (target / base.width) * zoom, rotation });
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+        setSize({ width: viewport.width, height: viewport.height });
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas context unavailable.");
+        await page.render({
+          canvas,
+          canvasContext: ctx,
+          viewport,
+          transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0],
+        }).promise;
+        if (!cancelled) {
+          setState("READY");
+          setError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setState("FALLBACK");
+          setError(e instanceof Error ? e.message : "PDF render failed.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      task?.destroy?.();
+    };
+  }, [url, pageNumber, zoom, rotation]);
+
+  function click(e: React.MouseEvent<HTMLDivElement>) {
+    if (!interactive || freehandMode) return;
+    onPoint(normalized(e, e.currentTarget));
+  }
+  function down(e: React.PointerEvent<HTMLDivElement>) {
+    if (!interactive || !freehandMode) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = normalized(e, e.currentTarget);
+    drawingRef.current = [p];
+    setDrawing([p]);
+  }
+  function move(e: React.PointerEvent<HTMLDivElement>) {
+    if (!interactive || !freehandMode || !drawingRef.current.length) return;
+    const p = normalized(e, e.currentTarget);
+    const last = drawingRef.current.at(-1)!;
+    if (Math.hypot(p.x - last.x, p.y - last.y) < 0.002) return;
+    drawingRef.current = [...drawingRef.current, p];
+    setDrawing(drawingRef.current);
+  }
+  function up(e: React.PointerEvent<HTMLDivElement>) {
+    if (!interactive || !freehandMode || !drawingRef.current.length) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    const pts = drawingRef.current;
+    drawingRef.current = [];
+    setDrawing([]);
+    if (pts.length >= 2) onFreehand?.(pts);
+  }
+
+  const live: Geometry | null = drawing.length >= 2 ? { type: "Freehand", points: drawing } : null;
+  const all: Array<{ key: string; g: Geometry; selected: boolean; title: string; id: string | null }> = [
+    ...marks.map((m) => ({ key: m.id, g: m.geometry, selected: m.selected, title: m.title, id: m.id })),
+    ...(draft ? [{ key: "draft", g: draft, selected: true, title: "Draft", id: null }] : []),
+    ...(live ? [{ key: "live", g: live, selected: true, title: "Freehand", id: null }] : []),
+    ...(start ? [{ key: "start", g: { type: "Point", x: start.x, y: start.y } as Geometry, selected: true, title: "Start", id: null }] : []),
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn-secondary min-h-11" onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}>− Zoom</button>
+        <span className="tag REF">{Math.round(zoom * 100)}%</span>
+        <button type="button" className="btn-secondary min-h-11" onClick={() => setZoom((z) => Math.min(4, Number((z + 0.25).toFixed(2))))}>+ Zoom</button>
+        <button type="button" className="btn-secondary min-h-11" onClick={() => setZoom(1)}>Fit</button>
+        <button type="button" className="btn-secondary min-h-11" onClick={() => setRotation((r) => ((r + 90) % 360) as 0 | 90 | 180 | 270)}>Rotate 90°</button>
+        <span className="cat">{rotation}°</span>
+      </div>
+      {state === "FALLBACK" && url && <div className="border border-[#6A5521] bg-[#211B0D] p-2 text-xs text-[#F0D98A]">PDF.js could not read this source directly{error ? `: ${error}` : ""}. Browser fallback remains available below.</div>}
+      <div className="max-h-[76vh] min-h-[560px] overflow-auto border border-[#1C3A57] bg-[#07131D] p-2">
+        {state === "FALLBACK" && url ? (
+          <iframe src={`${url}#page=${pageNumber}`} title="Drawing PDF fallback" className="h-[72vh] w-full bg-white" style={{ pointerEvents: interactive ? "none" : "auto" }} />
+        ) : (
+          <div className="relative touch-none bg-white" style={{ width: size.width, height: size.height }} onClick={click} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+            <canvas ref={canvasRef} className="absolute inset-0 block max-w-none" />
+            <svg className={`absolute inset-0 h-full w-full ${interactive ? "cursor-crosshair" : "pointer-events-none"}`} viewBox="0 0 1000 1000" preserveAspectRatio="none">
+              {all.map((m) => {
+                const g = m.g;
+                const stroke = m.selected ? "#0E7490" : "#D97706";
+                const common = { onClick: (e: React.MouseEvent) => { if (m.id) { e.stopPropagation(); onSelect(m.id); } }, className: m.id ? "pointer-events-auto cursor-pointer" : "" };
+                if (g.type === "Point") return <g key={m.key} {...common}><circle cx={g.x * 1000} cy={g.y * 1000} r="10" fill="#F59E0B" stroke="#07131D" strokeWidth="4" /><title>{m.title}</title></g>;
+                if (g.type === "Text") return <g key={m.key} {...common}><rect x={g.x * 1000 - 8} y={g.y * 1000 - 18} width="160" height="28" fill="#FFF7D6" stroke={stroke} strokeWidth="3" /><text x={g.x * 1000} y={g.y * 1000} fontSize="18" fill="#111827">{m.title}</text></g>;
+                if (g.type === "Polygon" || g.type === "Freehand") {
+                  const pts = g.points.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ");
+                  return <g key={m.key} {...common}>{g.type === "Polygon" ? <polygon points={pts} fill="rgba(217,119,6,.08)" stroke={stroke} strokeWidth="6" /> : <polyline points={pts} fill="none" stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />}<title>{m.title}</title></g>;
+                }
+                if (!("x1" in g)) return null;
+                const x1 = g.x1 * 1000, y1 = g.y1 * 1000, x2 = g.x2 * 1000, y2 = g.y2 * 1000;
+                if (g.type === "Arrow") return <g key={m.key} {...common}><defs><marker id={`arrow-${m.key}`} markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill={stroke} /></marker></defs><line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth="6" markerEnd={`url(#arrow-${m.key})`} /><title>{m.title}</title></g>;
+                const x = Math.min(x1, x2), y = Math.min(y1, y2), w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+                return <g key={m.key} {...common}><rect x={x} y={y} width={w} height={h} fill="none" stroke={stroke} strokeWidth="6" strokeDasharray={g.type === "Cloud" ? "18 10" : "0"} rx={g.type === "Cloud" ? 18 : 0} /><title>{m.title}</title></g>;
+              })}
+            </svg>
+            {state === "LOADING" && <div className="absolute inset-0 grid place-items-center bg-white/70 text-sm text-slate-600">Rendering PDF page…</div>}
+            {state === "EMPTY" && <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">No source PDF URL registered.</div>}
+          </div>
+        )}
+      </div>
+      <div className="cat">PDF.js page {pageNumber} · zoom {Math.round(zoom * 100)}% · rotation {rotation}° · normalized markup coordinates · {state}</div>
+    </div>
+  );
 }
