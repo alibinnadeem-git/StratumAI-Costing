@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { AdderBasis, AdderType, CostSource, EstimateCondition, EstimateStatus, MarketAffects, MarketDirection } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireAccountRole, requireTenantContext } from "@/lib/session";
+import { requireAccountRole } from "@/lib/session";
 import { logAction } from "@/lib/audit";
 import { NECA_RATES } from "@/lib/costing-data";
 
@@ -228,7 +228,7 @@ export async function deleteEstimateAction(formData: FormData) {
 }
 
 async function requireEstimate(estimateId: string) {
-  const ctx = await requireTenantContext();
+  const ctx = await requireAccountRole("MEMBER");
   const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } });
   if (!estimate) throw new Error("Estimate not found.");
   return { ctx, estimate };
@@ -245,7 +245,7 @@ export async function addEstimateLineAction(formData: FormData) {
   ]);
   if (!estimate || !item) throw new Error("Estimate or cost item not found.");
   const count = await db.estimateLineItem.count({ where: { estimateId } });
-  await db.estimateLineItem.create({
+  const line=await db.estimateLineItem.create({
     data: {
       estimateId,
       costItemId,
@@ -262,14 +262,15 @@ export async function addEstimateLineAction(formData: FormData) {
       sortOrder: count,
     },
   });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:estimate.projectId,action:"cost.estimate.line.create",detail:`Added estimate line ${line.description} to estimate #${estimate.number}`});
   revalidatePath(`/costing/estimates/${estimateId}`);
 }
 
 export async function addCustomEstimateLineAction(formData: FormData) {
   const estimateId = str(formData, "estimateId");
-  const { estimate } = await requireEstimate(estimateId);
+  const { ctx, estimate } = await requireEstimate(estimateId);
   const count = await db.estimateLineItem.count({ where: { estimateId } });
-  await db.estimateLineItem.create({
+  const line=await db.estimateLineItem.create({
     data: {
       estimateId: estimate.id,
       description: str(formData, "description") || "Custom line",
@@ -282,6 +283,7 @@ export async function addCustomEstimateLineAction(formData: FormData) {
       sortOrder: count,
     },
   });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:estimate.projectId,action:"cost.estimate.line.create",detail:`Added custom estimate line ${line.description} to estimate #${estimate.number}`});
   revalidatePath(`/costing/estimates/${estimateId}`);
 }
 
@@ -300,15 +302,17 @@ export async function updateEstimateLineAction(formData: FormData) {
       laborHoursPerUnit: Math.max(0, num(formData, "laborHoursPerUnit", line.laborHoursPerUnit)),
     },
   });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:line.estimate.projectId,action:"cost.estimate.line.update",detail:`Updated estimate line ${line.description} on estimate #${line.estimate.number}`});
   revalidatePath(`/costing/estimates/${line.estimateId}`);
 }
 
 export async function deleteEstimateLineAction(formData: FormData) {
   const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { accountId: ctx.account.id } } });
+  const line = await db.estimateLineItem.findFirst({ where: { id, estimate: { accountId: ctx.account.id } },include:{estimate:true} });
   if (!line) return;
   await db.estimateLineItem.delete({ where: { id } });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:line.estimate.projectId,action:"cost.estimate.line.delete",detail:`Deleted estimate line ${line.description} from estimate #${line.estimate.number}`});
   revalidatePath(`/costing/estimates/${line.estimateId}`);
 }
 
@@ -342,7 +346,7 @@ export async function addEstimateAdderAction(formData: FormData) {
   const estimateId = str(formData, "estimateId");
   const estimate = await db.costEstimate.findFirst({ where: { id: estimateId, accountId: ctx.account.id } });
   if (!estimate) throw new Error("Estimate not found.");
-  await db.estimateAdder.create({
+  const adder=await db.estimateAdder.create({
     data: {
       estimateId,
       name: str(formData, "name") || "Additional cost",
@@ -351,15 +355,17 @@ export async function addEstimateAdderAction(formData: FormData) {
       amount: num(formData, "amount", 0),
     },
   });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:estimate.projectId,action:"cost.estimate.adder.create",detail:`Added estimate adder ${adder.name} to estimate #${estimate.number}`});
   revalidatePath(`/costing/estimates/${estimateId}`);
 }
 
 export async function deleteEstimateAdderAction(formData: FormData) {
   const ctx = await requireAccountRole("MEMBER");
   const id = str(formData, "id");
-  const adder = await db.estimateAdder.findFirst({ where: { id, estimate: { accountId: ctx.account.id } } });
+  const adder = await db.estimateAdder.findFirst({ where: { id, estimate: { accountId: ctx.account.id } },include:{estimate:true} });
   if (!adder) return;
   await db.estimateAdder.delete({ where: { id } });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId:adder.estimate.projectId,action:"cost.estimate.adder.delete",detail:`Deleted estimate adder ${adder.name} from estimate #${adder.estimate.number}`});
   revalidatePath(`/costing/estimates/${adder.estimateId}`);
 }
 
