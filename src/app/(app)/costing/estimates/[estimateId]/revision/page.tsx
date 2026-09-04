@@ -52,7 +52,7 @@ export default async function EstimateRevisionPage({ params }: { params: Promise
           : "This estimate is still editable, but you can create a separate revision snapshot when you want to preserve the current version before making changes."}
       </div>
 
-      <form action={createEstimateRevisionAction}>
+      <form action={createEstimateRevisionAction} className="allow-controlled-action">
         <input type="hidden" name="estimateId" value={estimate.id} />
         <button className="btn">Create draft revision</button>
       </form>
