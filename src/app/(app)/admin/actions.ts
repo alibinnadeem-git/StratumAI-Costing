@@ -10,27 +10,38 @@ import { Role } from "@prisma/client";
 export async function inviteMemberAction(formData: FormData) {
   const ctx = await requireRole("ADMIN");
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
-  const role = (String(formData.get("role") ?? "MEMBER") as Role);
+  const role = String(formData.get("role") ?? "MEMBER") as Role;
   if (!email) return;
   if (!can.changeRoleTo(ctx.role, role)) throw new Error("Forbidden: cannot invite at that role.");
 
+  const accountId = String(formData.get("accountId") ?? ctx.account.id).trim() || ctx.account.id;
+  const targetAccount = await db.account.findFirst({ where: { id: accountId, organizationId: ctx.organization.id } });
+  if (!targetAccount) throw new Error("Target account not found in this organization.");
+
   const existingUser = await db.user.findUnique({ where: { email } });
   if (existingUser) {
-    const already = await db.membership.findUnique({
-      where: { userId_organizationId: { userId: existingUser.id, organizationId: ctx.organization.id } },
+    await db.$transaction(async (tx) => {
+      await tx.membership.upsert({
+        where: { userId_organizationId: { userId: existingUser.id, organizationId: ctx.organization.id } },
+        update: {},
+        create: { userId: existingUser.id, organizationId: ctx.organization.id, role },
+      });
+      await tx.accountMembership.upsert({
+        where: { userId_accountId: { userId: existingUser.id, accountId: targetAccount.id } },
+        update: {},
+        create: { userId: existingUser.id, accountId: targetAccount.id, role },
+      });
     });
-    if (!already) {
-      await db.membership.create({ data: { userId: existingUser.id, organizationId: ctx.organization.id, role } });
-      await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "member.add", detail: `Added existing user ${email} as ${role}` });
-    }
+    await logAction({ organizationId: ctx.organization.id, accountId: targetAccount.id, userId: ctx.user.id, action: "member.add", detail: `Added existing user ${email} as ${role} to ${targetAccount.name}` });
   } else {
-    // No account yet — create a pending invite. In production this fires an
-    // email with a signup link (`/invite/[token]`); wire that route + the
-    // Resend call in lib/email.ts when you're ready to go live.
-    await db.invite.create({ data: { email, role, organizationId: ctx.organization.id } });
-    await logAction({ organizationId: ctx.organization.id, userId: ctx.user.id, action: "member.invite", detail: `Invited ${email} as ${role}` });
+    await db.$executeRawUnsafe(
+      `INSERT INTO "Invite" ("id","email","role","token","createdAt","organizationId","accountId") VALUES ($1,$2,$3::"Role",$4,NOW(),$5,$6)`,
+      crypto.randomUUID(), email, role, crypto.randomUUID(), ctx.organization.id, targetAccount.id,
+    );
+    await logAction({ organizationId: ctx.organization.id, accountId: targetAccount.id, userId: ctx.user.id, action: "member.invite", detail: `Invited ${email} as ${role} to ${targetAccount.name}` });
   }
   revalidatePath("/admin");
+  revalidatePath("/admin/members");
 }
 
 export async function updateMemberRoleAction(membershipId: string, newRole: Role) {
