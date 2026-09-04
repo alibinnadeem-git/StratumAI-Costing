@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTenantContext } from "@/lib/session";
 import { can } from "@/lib/rbac";
 import { db } from "@/lib/db";
@@ -15,11 +16,14 @@ export default async function SuppliersPage() {
   return (
     <div className="space-y-5">
       <section className="stratum-sheet">
-        <div className="mb-4">
-          <h1 className="stratum-sheet-title">Suppliers</h1>
-          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[#6D8AA0]">
-            {ctx.organization.name} · {ctx.account.name} · vendor directory and RFQ sourcing
-          </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="stratum-sheet-title">Suppliers</h1>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.05em] text-[#6D8AA0]">
+              {ctx.organization.name} · {ctx.account.name} · vendor directory and RFQ sourcing
+            </p>
+          </div>
+          <Link href="/suppliers/lead-times" className="btn-secondary">Lead-time intelligence</Link>
         </div>
 
         {canManage && (
