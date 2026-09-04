@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
@@ -63,6 +64,30 @@ export async function linkSpatialEstimateAction(projectId:string,formData:FormDa
   await linkSpatialToEstimate({spatialObjectId,estimateLineId,accountId:ctx.account.id,quantityBasis:n(formData,"quantityBasis")||null});
   await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.estimate.link",detail:`Linked spatial object ${spatialObjectId} to estimate line ${estimateLineId}`});
   revalidatePath(`/projects/${projectId}/drawings`);
+}
+
+export async function applyAssemblyToEstimateAction(projectId:string,formData:FormData){
+  const {ctx}=await projectCtx(projectId);
+  const spatialObjectId=s(formData,"spatialObjectId"); const assemblyId=s(formData,"assemblyId"); const estimateId=s(formData,"estimateId");
+  if(!spatialObjectId||!assemblyId||!estimateId) throw new Error("Takeoff object, assembly, and estimate are required.");
+  const objects=await db.$queryRawUnsafe<Array<{id:string;name:string;objectType:string;quantity:number;measurement:number|null;unit:string;verifiedAt:Date|null}>>(`SELECT "id","name","objectType","quantity","measurement","unit","verifiedAt" FROM "SpatialTakeoffObject" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,spatialObjectId,projectId,ctx.account.id);
+  const object=objects[0]; if(!object) throw new Error("Takeoff object not found."); if(!object.verifiedAt) throw new Error("Verify the takeoff object before converting it to estimate scope.");
+  const estimate=await db.costEstimate.findFirst({where:{id:estimateId,projectId,accountId:ctx.account.id}}); if(!estimate) throw new Error("Estimate not found for this project."); if(!["DRAFT","REVIEW"].includes(estimate.status)) throw new Error("Create a revision before adding assembly scope to a controlled estimate.");
+  const assemblies=await db.$queryRawUnsafe<Array<{id:string;name:string;category:string|null;baseUnit:string}>>(`SELECT "id","name","category","baseUnit" FROM "AssemblyDefinition" WHERE "id"=$1 AND "accountId"=$2`,assemblyId,ctx.account.id); const assembly=assemblies[0]; if(!assembly) throw new Error("Assembly not found.");
+  const components=await db.$queryRawUnsafe<Array<{costItemId:string|null;description:string;quantityFactor:number;unit:string;materialCost:number;laborHours:number}>>(`SELECT "costItemId","description","quantityFactor","unit","materialCost","laborHours" FROM "AssemblyComponent" WHERE "assemblyId"=$1 ORDER BY "createdAt"`,assemblyId); if(!components.length) throw new Error("Add at least one component to the assembly first.");
+  const basis=object.objectType==="COUNT"?object.quantity:(object.measurement??object.quantity); if(!(basis>0)) throw new Error("Takeoff measurement must be greater than zero.");
+  const existing=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "SpatialAssemblyLink" WHERE "spatialObjectId"=$1 AND "assemblyId"=$2 AND "estimateId"=$3`,spatialObjectId,assemblyId,estimateId); if(existing[0]) throw new Error("This assembly has already been applied to this takeoff object and estimate.");
+  const start=await db.estimateLineItem.count({where:{estimateId}});
+  const createdIds:string[]=[];
+  await db.$transaction(async(tx)=>{
+    for(let i=0;i<components.length;i++){
+      const c=components[i]; const line=await tx.estimateLineItem.create({data:{estimateId,costItemId:c.costItemId,description:`${assembly.name} · ${c.description}`,category:assembly.category||"Assembly",quantity:basis*c.quantityFactor,unit:c.unit,materialCost:c.materialCost,laborHoursPerUnit:c.laborHours,notes:`Generated from verified drawing takeoff "${object.name}" using assembly "${assembly.name}". Spatial object ${object.id}.`,sortOrder:start+i}}); createdIds.push(line.id);
+      await tx.$executeRawUnsafe(`INSERT INTO "SpatialEstimateLink" ("id","accountId","spatialObjectId","estimateLineId","quantityBasis") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("spatialObjectId","estimateLineId") DO NOTHING`,randomUUID(),ctx.account.id,spatialObjectId,line.id,basis);
+    }
+    await tx.$executeRawUnsafe(`INSERT INTO "SpatialAssemblyLink" ("id","accountId","spatialObjectId","assemblyId","estimateId") VALUES ($1,$2,$3,$4,$5)`,randomUUID(),ctx.account.id,spatialObjectId,assemblyId,estimateId);
+  });
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.assembly.apply",detail:`Applied assembly ${assembly.name} to ${object.name}; created ${createdIds.length} estimate line(s) in EST-${String(estimate.number).padStart(4,"0")}`});
+  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/costing/estimates/${estimateId}`); revalidatePath(`/projects/${projectId}/drawings/revision-delta`);
 }
 
 export async function createAssemblyAction(formData:FormData){
