@@ -39,17 +39,21 @@ test("estimate lifecycle includes approved and superseded controlled states", as
   const statusEnum = schema.slice(enumStart, enumEnd);
   assert.match(statusEnum, /APPROVED/);
   assert.match(statusEnum, /SUPERSEDED/);
-  const guard = await read("prisma/migrations/202609042120_estimate_workflow_states/migration.sql");
-  assert.match(guard, /APPROVED/);
-  assert.match(guard, /SUPERSEDED/);
-  assert.match(guard, /protect_controlled_estimate_children/);
+  const statusMigration = await read("prisma/migrations/202609042135_estimate_workflow_statuses/migration.sql");
+  const guardMigration = await read("prisma/migrations/202609042140_controlled_estimate_workflow_guards/migration.sql");
+  assert.match(statusMigration, /APPROVED/);
+  assert.match(statusMigration, /SUPERSEDED/);
+  assert.match(guardMigration, /APPROVED/);
+  assert.match(guardMigration, /SUPERSEDED/);
+  assert.match(guardMigration, /protect_controlled_estimate_children/);
 });
 
 test("RFQ creation uses direct estimate-line identity", async () => {
   const source = await read("src/app/(app)/costing/estimates/[estimateId]/rfq/actions.ts");
-  assert.match(source, /crypto\.randomUUID\(\)/);
+  assert.match(source, /randomUUID\(\)/);
   assert.match(source, /rfqLineId/);
-  assert.match(source, /sourceLineId/);
+  assert.match(source, /estimateLineId/);
+  assert.match(source, /linkRfqLineToEstimateLine\(ctx\.account\.id,\s*rfqLineId,\s*estimateLineId\)/);
   assert.doesNotMatch(source, /line\.description === rfqLine\.description/);
 });
 
