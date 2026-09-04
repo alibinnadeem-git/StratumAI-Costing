@@ -1,0 +1,21 @@
+import { requireTenantContext } from "@/lib/session";
+import { db } from "@/lib/db";
+import { getAssemblies } from "@/lib/drawing-native";
+import { addAssemblyComponentAction, createAssemblyAction } from "../../projects/[projectId]/drawings/actions";
+import { money } from "@/lib/costing";
+
+export default async function AssembliesPage(){
+  const ctx=await requireTenantContext();
+  const [{assemblies,components},costItems]=await Promise.all([getAssemblies(ctx.account.id),db.costItem.findMany({where:{accountId:ctx.account.id},orderBy:{description:"asc"},take:1000})]);
+  const byAssembly=new Map<string,typeof components>(); for(const c of components) byAssembly.set(c.assemblyId,[...(byAssembly.get(c.assemblyId)||[]),c]);
+  return <div className="space-y-5">
+    <section className="stratum-sheet"><div><p className="font-mono text-[10px] uppercase tracking-[0.08em] text-[#6D8AA0]">Reusable Cost Intelligence</p><h1 className="stratum-sheet-title">Assembly Library</h1><p className="mt-2 text-sm text-[#9CB2C2]">Build reusable electrical assemblies from catalog items or explicit material/labor components. Assemblies are account-scoped and designed to convert drawing takeoff into repeatable estimating scope.</p></div></section>
+
+    <section className="stratum-sheet"><h2 className="text-sm font-semibold text-[#DCEBF5]">Create assembly</h2><form action={createAssemblyAction} className="mt-3 grid gap-2 md:grid-cols-5"><input name="name" required placeholder="1in EMT feeder assembly" className="md:col-span-2"/><input name="category" placeholder="Conduit / Feeder / Device"/><input name="baseUnit" defaultValue="EA" placeholder="Base unit"/><button className="btn">Create assembly</button><input name="description" className="md:col-span-5" placeholder="Assembly description / application"/></form></section>
+
+    <section className="space-y-3">{assemblies.map(a=>{const rows=byAssembly.get(a.id)||[]; const material=rows.reduce((n,c)=>n+c.materialCost*c.quantityFactor,0); const labor=rows.reduce((n,c)=>n+c.laborHours*c.quantityFactor,0); return <div key={a.id} className="stratum-sheet"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-semibold text-[#DCEBF5]">{a.name}</h2><p className="cat">{a.category||"General"} · base {a.baseUnit} · {rows.length} component{rows.length===1?"":"s"}</p></div><div className="text-right"><div className="font-mono text-sm text-[#6FD6C9]">{money(material)} material / {a.baseUnit}</div><div className="cat">{labor.toFixed(3)} labor hr / {a.baseUnit}</div></div></div>
+      <div className="table-scroll mt-3"><table className="min-w-[850px]"><thead><tr><th>Component</th><th>Catalog</th><th className="num">Factor</th><th>Unit</th><th className="num">Material</th><th className="num">Labor hr</th></tr></thead><tbody>{rows.map(c=><tr key={c.id}><td>{c.description}</td><td>{c.costItemId?"Linked":"Snapshot"}</td><td className="num">{c.quantityFactor}</td><td>{c.unit}</td><td className="num">{money(c.materialCost)}</td><td className="num">{c.laborHours.toFixed(3)}</td></tr>)}</tbody></table></div>
+      <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold text-[#9CB2C2]">Add component</summary><form action={addAssemblyComponentAction} className="mt-3 grid gap-2 md:grid-cols-3 xl:grid-cols-7"><input type="hidden" name="assemblyId" value={a.id}/><select name="costItemId" className="xl:col-span-2"><option value="">No catalog link</option>{costItems.map(i=><option key={i.id} value={i.id}>{i.description}</option>)}</select><input name="description" required placeholder="Component description" className="xl:col-span-2"/><input name="quantityFactor" type="number" step="0.001" defaultValue="1" placeholder="Factor"/><input name="unit" defaultValue="EA" placeholder="Unit"/><button className="btn">Add</button><input name="materialCost" type="number" step="0.01" placeholder="Material $ / component"/><input name="laborHours" type="number" step="0.001" placeholder="Labor hr / component"/></form></details>
+    </div>;})}{assemblies.length===0&&<div className="stratum-sheet"><div className="empty-state">No assemblies in this account yet.</div></div>}</section>
+  </div>;
+}
