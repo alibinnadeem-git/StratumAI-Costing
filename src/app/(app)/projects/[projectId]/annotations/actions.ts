@@ -35,12 +35,17 @@ function validateGeometry(g:unknown){
   if(!x.points.every(validPoint))throw new Error(`${type} points must be normalized between 0 and 1.`);
   const points=x.points as Pt[];
   if(type==="Freehand"){
-    if(points.length<2||points.every((p,i)=>i===0||distance(points[i-1],p)<0.000001))throw new Error("Freehand geometry is too small or degenerate.");
+    let hasMovement=false;
+    for(let i=1;i<points.length;i++){
+      const previous=points[i-1];const current=points[i];
+      if(previous&&current&&distance(previous,current)>=0.000001){hasMovement=true;break;}
+    }
+    if(points.length<2||!hasMovement)throw new Error("Freehand geometry is too small or degenerate.");
     return g;
   }
   if(points.length<3)throw new Error("Polygon requires at least three points.");
   const unique=new Set(points.map(p=>`${p.x.toFixed(6)}:${p.y.toFixed(6)}`));if(unique.size<3)throw new Error("Polygon requires at least three distinct points.");
-  let twiceArea=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length];twiceArea+=a.x*b.y-b.x*a.y;}if(Math.abs(twiceArea)<0.000001)throw new Error("Polygon area is too small or degenerate.");
+  let twiceArea=0;for(let i=0;i<points.length;i++){const a=points[i],b=points[(i+1)%points.length];if(a&&b)twiceArea+=a.x*b.y-b.x*a.y;}if(Math.abs(twiceArea)<0.000001)throw new Error("Polygon area is too small or degenerate.");
   return g;
 }
 function parseGeometry(fd:FormData){
