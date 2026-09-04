@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireRole } from "@/lib/session";
+import { requireRole, requireTenantContext } from "@/lib/session";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import { can } from "@/lib/rbac";
 import { Role } from "@prisma/client";
 
 export async function inviteMemberAction(formData: FormData) {
-  const ctx = await requireRole("ADMIN");
+  const ctx = await requireTenantContext();
+  if (ctx.role !== "OWNER" && ctx.role !== "ADMIN") throw new Error("Forbidden: administrator access is required.");
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
   const role = String(formData.get("role") ?? "MEMBER") as Role;
   if (!email) return;
