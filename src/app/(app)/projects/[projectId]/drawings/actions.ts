@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import { requireAccountRole } from "@/lib/session";
+import { calibratedLinearFeet, calibratedSquareFeet, lineRawMeasurement, rectangleRawArea } from "@/lib/drawing-measurement";
 import { addAssemblyComponent, createAssembly, createDrawingLayer, createDrawingRevision, createDrawingSet, createSpatialObject, linkSpatialToEstimate, verifySpatialObject } from "@/lib/drawing-native";
 
 const s=(f:FormData,k:string)=>String(f.get(k)??"").trim();
@@ -44,18 +45,38 @@ export async function createTakeoffObjectAction(projectId:string,formData:FormDa
   if(!["COUNT","LINEAR","AREA"].includes(objectType)) throw new Error("Unsupported takeoff type.");
   const revision=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT r."id" FROM "DrawingRevision" r JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE r."id"=$1 AND s."projectId"=$2 AND r."accountId"=$3`,drawingRevisionId,projectId,ctx.account.id); if(!revision[0]) throw new Error("Drawing revision not found.");
   const layerId=s(formData,"layerId")||null; if(layerId){const layer=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "DrawingLayer" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,layerId,projectId,ctx.account.id); if(!layer[0]) throw new Error("Layer not found.");}
-  const measurement=n(formData,"measurement"); const quantity=objectType==="COUNT"?Math.max(1,n(formData,"quantity")||1):Math.max(0,measurement); const unit=s(formData,"unit")||(objectType==="COUNT"?"EA":objectType==="LINEAR"?"LF":"SF");
-  const x=n(formData,"x"),y=n(formData,"y"),x2=n(formData,"x2"),y2=n(formData,"y2"); const geometryJson=objectType==="COUNT"?{type:"Point",x,y}:objectType==="LINEAR"?{type:"LineString",points:[{x,y},{x:x2,y:y2}]}:{type:"Polygon",points:[{x,y},{x:x2,y},{x:x2,y:y2},{x,y:y2}]};
-  const id=await createSpatialObject({projectId,accountId:ctx.account.id,drawingRevisionId,layerId,objectType,name,description:s(formData,"description")||null,quantity,unit,measurement:objectType==="COUNT"?null:measurement,geometryJson,source:"MANUAL",createdById:ctx.user.id});
-  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.spatial.create",detail:`Created ${objectType} takeoff ${name} (${id})`});
-  revalidatePath(`/projects/${projectId}/drawings`);
+  const calibrationRows=await db.$queryRawUnsafe<Array<{id:string;scaleFactor:number;realUnit:string}>>(`SELECT "id","scaleFactor","realUnit" FROM "DrawingCalibration" WHERE "drawingRevisionId"=$1 AND "accountId"=$2 LIMIT 1`,drawingRevisionId,ctx.account.id);
+  const calibration=calibrationRows[0]??null;
+  const x=n(formData,"x"),y=n(formData,"y"),x2=n(formData,"x2"),y2=n(formData,"y2");
+  const geometryJson=objectType==="COUNT"?{type:"Point",x,y}:objectType==="LINEAR"?{type:"LineString",points:[{x,y},{x:x2,y:y2}]}:{type:"Polygon",points:[{x,y},{x:x2,y},{x:x2,y:y2},{x,y:y2}]};
+  const manualMeasurement=n(formData,"measurement");
+  let rawMeasurement:number|null=null; let measurement:number|null=null; let quantity=1; let unit="EA"; let confidence=0.9; let source="MANUAL";
+  if(objectType==="COUNT"){
+    quantity=Math.max(1,n(formData,"quantity")||1); unit=s(formData,"unit")||"EA";
+  }else if(objectType==="LINEAR"){
+    rawMeasurement=lineRawMeasurement({x,y},{x:x2,y:y2});
+    if(calibration){measurement=calibratedLinearFeet(rawMeasurement,calibration); unit="LF"; confidence=0.98; source="MANUAL_CALIBRATED";}
+    else {measurement=manualMeasurement>0?manualMeasurement:null; unit=s(formData,"unit")||"LF"; confidence=0.6;}
+    if(!(measurement&&measurement>0)) throw new Error("Calibrate this sheet or provide a manual linear measurement greater than zero.");
+    quantity=measurement;
+  }else{
+    rawMeasurement=rectangleRawArea({x,y},{x:x2,y:y2});
+    if(calibration){measurement=calibratedSquareFeet(rawMeasurement,calibration); unit="SF"; confidence=0.98; source="MANUAL_CALIBRATED";}
+    else {measurement=manualMeasurement>0?manualMeasurement:null; unit=s(formData,"unit")||"SF"; confidence=0.6;}
+    if(!(measurement&&measurement>0)) throw new Error("Calibrate this sheet or provide a manual area measurement greater than zero.");
+    quantity=measurement;
+  }
+  const id=await createSpatialObject({projectId,accountId:ctx.account.id,drawingRevisionId,layerId,objectType,name,description:s(formData,"description")||null,quantity,unit,measurement,rawMeasurement,calibrationId:calibration?.id??null,calibrationScaleFactor:calibration?.scaleFactor??null,calibrationUnit:calibration?.realUnit??null,confidence,geometryJson,source,createdById:ctx.user.id});
+  const basis=calibration&&objectType!=="COUNT"?` calibrated to ${measurement?.toFixed(2)} ${unit}`:objectType==="COUNT"?` ${quantity} ${unit}`:` manual ${measurement?.toFixed(2)} ${unit}`;
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.spatial.create",detail:`Created ${objectType} takeoff ${name} (${id})${basis}`});
+  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/projects/${projectId}/drawings/viewer`); revalidatePath(`/projects/${projectId}/drawings/review`);
 }
 
 export async function verifyTakeoffObjectAction(projectId:string,formData:FormData){
   const {ctx}=await projectCtx(projectId); const objectId=s(formData,"objectId");
   await verifySpatialObject({objectId,accountId:ctx.account.id,userId:ctx.user.id});
   await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.spatial.verify",detail:`Verified spatial takeoff ${objectId}`});
-  revalidatePath(`/projects/${projectId}/drawings`);
+  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/projects/${projectId}/drawings/viewer`); revalidatePath(`/projects/${projectId}/drawings/review`);
 }
 
 export async function linkSpatialEstimateAction(projectId:string,formData:FormData){
@@ -63,7 +84,7 @@ export async function linkSpatialEstimateAction(projectId:string,formData:FormDa
   const valid=await db.$queryRawUnsafe<Array<{ok:number}>>(`SELECT 1 AS ok FROM "SpatialTakeoffObject" o JOIN "EstimateLineItem" l ON l."id"=$2 JOIN "CostEstimate" e ON e."id"=l."estimateId" WHERE o."id"=$1 AND o."projectId"=$3 AND o."accountId"=$4 AND e."projectId"=$3 AND e."accountId"=$4 LIMIT 1`,spatialObjectId,estimateLineId,projectId,ctx.account.id); if(!valid[0]) throw new Error("Object and estimate line must belong to this project/account.");
   await linkSpatialToEstimate({spatialObjectId,estimateLineId,accountId:ctx.account.id,quantityBasis:n(formData,"quantityBasis")||null});
   await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.estimate.link",detail:`Linked spatial object ${spatialObjectId} to estimate line ${estimateLineId}`});
-  revalidatePath(`/projects/${projectId}/drawings`);
+  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/projects/${projectId}/drawings/viewer`);
 }
 
 export async function applyAssemblyToEstimateAction(projectId:string,formData:FormData){
@@ -80,14 +101,14 @@ export async function applyAssemblyToEstimateAction(projectId:string,formData:Fo
   const start=await db.estimateLineItem.count({where:{estimateId}});
   const createdIds:string[]=[];
   await db.$transaction(async(tx)=>{
-    for(let i=0;i<components.length;i++){
-      const c=components[i]; const line=await tx.estimateLineItem.create({data:{estimateId,costItemId:c.costItemId,description:`${assembly.name} · ${c.description}`,category:assembly.category||"Assembly",quantity:basis*c.quantityFactor,unit:c.unit,materialCost:c.materialCost,laborHoursPerUnit:c.laborHours,notes:`Generated from verified drawing takeoff "${object.name}" using assembly "${assembly.name}". Spatial object ${object.id}.`,sortOrder:start+i}}); createdIds.push(line.id);
+    for(const [i,c] of components.entries()){
+      const line=await tx.estimateLineItem.create({data:{estimateId,costItemId:c.costItemId,description:`${assembly.name} · ${c.description}`,category:assembly.category||"Assembly",quantity:basis*c.quantityFactor,unit:c.unit,materialCost:c.materialCost,laborHoursPerUnit:c.laborHours,notes:`Generated from verified drawing takeoff "${object.name}" using assembly "${assembly.name}". Spatial object ${object.id}.`,sortOrder:start+i}}); createdIds.push(line.id);
       await tx.$executeRawUnsafe(`INSERT INTO "SpatialEstimateLink" ("id","accountId","spatialObjectId","estimateLineId","quantityBasis") VALUES ($1,$2,$3,$4,$5) ON CONFLICT ("spatialObjectId","estimateLineId") DO NOTHING`,randomUUID(),ctx.account.id,spatialObjectId,line.id,basis);
     }
     await tx.$executeRawUnsafe(`INSERT INTO "SpatialAssemblyLink" ("id","accountId","spatialObjectId","assemblyId","estimateId") VALUES ($1,$2,$3,$4,$5)`,randomUUID(),ctx.account.id,spatialObjectId,assemblyId,estimateId);
   });
   await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"takeoff.assembly.apply",detail:`Applied assembly ${assembly.name} to ${object.name}; created ${createdIds.length} estimate line(s) in EST-${String(estimate.number).padStart(4,"0")}`});
-  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/costing/estimates/${estimateId}`); revalidatePath(`/projects/${projectId}/drawings/revision-delta`);
+  revalidatePath(`/projects/${projectId}/drawings`); revalidatePath(`/costing/estimates/${estimateId}`); revalidatePath(`/projects/${projectId}/drawings/revision-delta`); revalidatePath(`/projects/${projectId}/drawings/viewer`);
 }
 
 export async function createAssemblyAction(formData:FormData){
