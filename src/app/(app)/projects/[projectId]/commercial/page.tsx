@@ -76,7 +76,7 @@ export default async function ProjectCommercialPage({ params }: { params: Promis
     <section className="stratum-sheet">
       <div className="mb-3 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-[#DCEBF5]">Supplier bid leveling</h2><p className="cat">Normalized by catalog item when available; otherwise description + unit</p></div><Link href="/costing/quotes" className="btn-secondary">Manage quotes</Link></div>
       {leveled.length === 0 ? <div className="empty-state">No project supplier quotes available for comparison.</div> : <div className="table-scroll"><table className="min-w-[950px]"><thead><tr><th>Scope</th><th>Lowest supplier</th><th className="num">Low</th><th className="num">High</th><th className="num">Spread</th><th>Quote validity</th></tr></thead><tbody>{leveled.map(({ group, low, high, spreadPct }, i) => {
-        const best = group[0]; const validity = best.validUntil ? (best.validUntil < now ? "Expired" : `${daysFromNow(best.validUntil)}d remaining`) : "No expiry";
+        const best = group[0]!; const validity = best.validUntil ? (best.validUntil < now ? "Expired" : `${daysFromNow(best.validUntil)}d remaining`) : "No expiry";
         return <tr key={`${keyForQuote(best)}-${i}`}><td className="desc-cell">{best.costItem?.description || best.description}<span className="cat">{group.length} quote{group.length === 1 ? "" : "s"} · {best.unit}</span></td><td>{best.supplier?.name || "Unassigned"}</td><td className="num text-[#6FD6C9]">{money(low)}</td><td className="num">{money(high)}</td><td className={`num ${spreadPct >= 20 ? "text-amber-300" : ""}`}>{spreadPct.toFixed(1)}%</td><td>{validity}</td></tr>;
       })}</tbody></table></div>}
     </section>
