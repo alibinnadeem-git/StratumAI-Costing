@@ -60,9 +60,11 @@ enum CostSource {
 enum EstimateStatus {
   DRAFT
   REVIEW
+  APPROVED
   SUBMITTED
   AWARDED
   LOST
+  SUPERSEDED
   ARCHIVED
 }
 
@@ -123,6 +125,7 @@ model Account {
 
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships    AccountMembership[]
+  invites        Invite[]
   projects       Project[]
   suppliers      Supplier[]
   costSettings   CostSettings?
@@ -194,8 +197,11 @@ model Invite {
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountId      String?
+  account        Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+  @@index([accountId])
 }
 
 model Project {
