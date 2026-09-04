@@ -32,3 +32,21 @@ export async function saveDrawingViewAction(projectId:string,revisionId:string,i
   revalidatePath(`/projects/${projectId}/drawings/viewer`);
   revalidatePath(`/projects/${projectId}/drawings/revision-delta`);
 }
+
+export async function saveExtractedDrawingMetadataAction(projectId:string,revisionId:string,input:{sheetNumber:string;sheetTitle:string;revision:string}){
+  const ctx=await requireAccountRole("MEMBER");
+  const rows=await db.$queryRawUnsafe<Array<{id:string;sheetNumber:string;sheetTitle:string|null;revision:string}>>(`SELECT r."id",r."sheetNumber",r."sheetTitle",r."revision" FROM "DrawingRevision" r JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE r."id"=$1 AND r."accountId"=$2 AND s."projectId"=$3`,revisionId,ctx.account.id,projectId);
+  const current=rows[0];
+  if(!current)throw new Error("Drawing revision not found in this project.");
+  const sheetNumber=input.sheetNumber.trim().slice(0,80);
+  const sheetTitle=input.sheetTitle.trim().slice(0,240);
+  const revision=input.revision.trim().slice(0,40);
+  if(!sheetNumber)throw new Error("Sheet number is required.");
+  if(!revision)throw new Error("Revision label is required.");
+  await db.$executeRawUnsafe(`UPDATE "DrawingRevision" SET "sheetNumber"=$1,"sheetTitle"=NULLIF($2,''),"revision"=$3,"viewUpdatedAt"=CURRENT_TIMESTAMP WHERE "id"=$4 AND "accountId"=$5`,sheetNumber,sheetTitle,revision,revisionId,ctx.account.id);
+  await logAction({organizationId:ctx.organization.id,accountId:ctx.account.id,userId:ctx.user.id,projectId,action:"drawing.metadata.review",detail:`Reviewed PDF metadata for drawing revision ${revisionId}: ${current.sheetNumber} R${current.revision} → ${sheetNumber} R${revision}${sheetTitle?` · ${sheetTitle}`:""}`});
+  revalidatePath(`/projects/${projectId}/drawings/markup`);
+  revalidatePath(`/projects/${projectId}/drawings/viewer`);
+  revalidatePath(`/projects/${projectId}/drawings/revision-delta`);
+  revalidatePath(`/projects/${projectId}/drawings/review`);
+}
