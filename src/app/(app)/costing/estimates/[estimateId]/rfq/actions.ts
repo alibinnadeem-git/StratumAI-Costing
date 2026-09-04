@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "crypto";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
@@ -34,6 +35,7 @@ export async function createRfqFromEstimateAction(formData: FormData) {
   });
   if (suppliers.length !== supplierIds.length) throw new Error("One or more suppliers are outside the active account.");
 
+  const rfqLineMap = estimate.lineItems.map((line) => ({ estimateLineId: line.id, rfqLineId: randomUUID(), line }));
   const rfq = await db.$transaction(async (tx) => {
     const last = await tx.rfq.findFirst({ where: { projectId: estimate.projectId! }, orderBy: { number: "desc" } });
     const number = (last?.number ?? 0) + 1;
@@ -49,7 +51,8 @@ export async function createRfqFromEstimateAction(formData: FormData) {
         ].filter(Boolean).join("\n\n"),
         createdById: ctx.user.id,
         lineItems: {
-          create: estimate.lineItems.map((line) => ({
+          create: rfqLineMap.map(({ rfqLineId, line }) => ({
+            id: rfqLineId,
             description: line.description,
             quantity: line.quantity,
             unit: line.unit,
@@ -66,9 +69,8 @@ export async function createRfqFromEstimateAction(formData: FormData) {
   });
 
   await linkRfqToEstimate(ctx.account.id, rfq.id, estimate.id);
-  for (const rfqLine of rfq.lineItems) {
-    const source = estimate.lineItems.find((line) => line.description === rfqLine.description && line.quantity === rfqLine.quantity && line.unit === rfqLine.unit);
-    if (source) await linkRfqLineToEstimateLine(ctx.account.id, rfqLine.id, source.id);
+  for (const { rfqLineId, estimateLineId } of rfqLineMap) {
+    await linkRfqLineToEstimateLine(ctx.account.id, rfqLineId, estimateLineId);
   }
 
   await logAction({
@@ -77,7 +79,7 @@ export async function createRfqFromEstimateAction(formData: FormData) {
     userId: ctx.user.id,
     projectId: estimate.projectId,
     action: "rfq.create_from_estimate",
-    detail: `Created RFQ-${String(rfq.number).padStart(3, "0")} from EST-${String(estimate.number).padStart(4, "0")} with ${lineIds.length} line(s) and ${supplierIds.length} supplier(s)`,
+    detail: `Created RFQ-${String(rfq.number).padStart(3, "0")} from EST-${String(estimate.number).padStart(4, "0")} with ${lineIds.length} deterministic line link(s) and ${supplierIds.length} supplier(s)`,
   });
 
   redirect(`/projects/${estimate.projectId}`);
