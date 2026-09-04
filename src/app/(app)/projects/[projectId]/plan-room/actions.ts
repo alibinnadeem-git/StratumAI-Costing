@@ -12,12 +12,12 @@ async function requireDocument(documentId:string,projectId:string,accountId:stri
 async function requireAssociationTarget(entityType:string,entityId:string,projectId:string,accountId:string){
   if(entityType==="PROJECT"){await requireProject(entityId,accountId);if(entityId!==projectId)throw new Error("Association target must belong to the current project.");return;}
   let rows:Array<{id:string}>=[];
-  if(entityType==="ESTIMATE") rows=await db.$queryRawUnsafe(`SELECT "id" FROM "CostEstimate" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,entityId,projectId,accountId);
-  else if(entityType==="RFI") rows=await db.$queryRawUnsafe(`SELECT r."id" FROM "Rfi" r JOIN "Project" p ON p."id"=r."projectId" WHERE r."id"=$1 AND r."projectId"=$2 AND p."accountId"=$3`,entityId,projectId,accountId);
-  else if(entityType==="RFQ") rows=await db.$queryRawUnsafe(`SELECT r."id" FROM "Rfq" r JOIN "Project" p ON p."id"=r."projectId" WHERE r."id"=$1 AND r."projectId"=$2 AND p."accountId"=$3`,entityId,projectId,accountId);
-  else if(entityType==="QUOTE") rows=await db.$queryRawUnsafe(`SELECT "id" FROM "SupplierQuote" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,entityId,projectId,accountId);
-  else if(entityType==="DRAWING_REVISION") rows=await db.$queryRawUnsafe(`SELECT r."id" FROM "DrawingRevision" r JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE r."id"=$1 AND s."projectId"=$2 AND r."accountId"=$3`,entityId,projectId,accountId);
-  else if(entityType==="TAKEOFF"||entityType==="SPATIAL_OBJECT") rows=await db.$queryRawUnsafe(`SELECT o."id" FROM "SpatialTakeoffObject" o JOIN "DrawingRevision" r ON r."id"=o."drawingRevisionId" JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE o."id"=$1 AND s."projectId"=$2 AND o."accountId"=$3`,entityId,projectId,accountId);
+  if(entityType==="ESTIMATE") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "CostEstimate" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,entityId,projectId,accountId);
+  else if(entityType==="RFI") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT r."id" FROM "Rfi" r JOIN "Project" p ON p."id"=r."projectId" WHERE r."id"=$1 AND r."projectId"=$2 AND p."accountId"=$3`,entityId,projectId,accountId);
+  else if(entityType==="RFQ") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT r."id" FROM "Rfq" r JOIN "Project" p ON p."id"=r."projectId" WHERE r."id"=$1 AND r."projectId"=$2 AND p."accountId"=$3`,entityId,projectId,accountId);
+  else if(entityType==="QUOTE") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "SupplierQuote" WHERE "id"=$1 AND "projectId"=$2 AND "accountId"=$3`,entityId,projectId,accountId);
+  else if(entityType==="DRAWING_REVISION") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT r."id" FROM "DrawingRevision" r JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE r."id"=$1 AND s."projectId"=$2 AND r."accountId"=$3`,entityId,projectId,accountId);
+  else if(entityType==="TAKEOFF"||entityType==="SPATIAL_OBJECT") rows=await db.$queryRawUnsafe<Array<{id:string}>>(`SELECT o."id" FROM "SpatialTakeoffObject" o JOIN "DrawingRevision" r ON r."id"=o."drawingRevisionId" JOIN "DrawingSet" s ON s."id"=r."drawingSetId" WHERE o."id"=$1 AND s."projectId"=$2 AND o."accountId"=$3`,entityId,projectId,accountId);
   else throw new Error("Unsupported association target type.");
   if(!rows[0]) throw new Error("Association target not found in this project/account.");
 }
