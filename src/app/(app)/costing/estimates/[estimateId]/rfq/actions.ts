@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { logAction } from "@/lib/audit";
 import { requireAccountRole } from "@/lib/session";
+import { linkRfqLineToEstimateLine, linkRfqToEstimate } from "@/lib/commercial-intelligence";
 
 export async function createRfqFromEstimateAction(formData: FormData) {
   const ctx = await requireAccountRole("MEMBER");
@@ -60,8 +61,15 @@ export async function createRfqFromEstimateAction(formData: FormData) {
         },
         recipients: { create: supplierIds.map((supplierId) => ({ supplierId })) },
       },
+      include: { lineItems: true },
     });
   });
+
+  await linkRfqToEstimate(ctx.account.id, rfq.id, estimate.id);
+  for (const rfqLine of rfq.lineItems) {
+    const source = estimate.lineItems.find((line) => line.description === rfqLine.description && line.quantity === rfqLine.quantity && line.unit === rfqLine.unit);
+    if (source) await linkRfqLineToEstimateLine(ctx.account.id, rfqLine.id, source.id);
+  }
 
   await logAction({
     organizationId: ctx.organization.id,
