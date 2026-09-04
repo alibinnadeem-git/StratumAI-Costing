@@ -25,6 +25,8 @@ type Props = {
   initialRotation?: 0 | 90 | 180 | 270;
 };
 
+const PDF_WORKER_SRC = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+
 function normalized(e: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, el: HTMLDivElement) {
   const r = el.getBoundingClientRect();
   return {
@@ -68,7 +70,7 @@ export default function PdfPageSurface({
       try {
         setState("LOADING");
         const pdfjs = await import("pdfjs-dist");
-        pdfjs.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@6.3.289/build/pdf.worker.min.mjs";
+        pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
         const loading = pdfjs.getDocument({ url });
         task = loading;
         const pdf = await loading.promise;
@@ -186,7 +188,7 @@ export default function PdfPageSurface({
           </div>
         )}
       </div>
-      <div className="cat">PDF.js page {pageNumber} · zoom {Math.round(zoom * 100)}% · rotation {rotation}° · normalized markup coordinates · {state}</div>
+      <div className="cat">PDF.js page {pageNumber} · zoom {Math.round(zoom * 100)}% · rotation {rotation}° · normalized markup coordinates · bundled worker · {state}</div>
     </div>
   );
 }
