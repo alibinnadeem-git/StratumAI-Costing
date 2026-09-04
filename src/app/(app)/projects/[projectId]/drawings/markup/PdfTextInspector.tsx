@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { saveExtractedDrawingMetadataAction } from "./actions";
 
 type Extracted = {
   sheetNumber: string | null;
@@ -13,6 +15,16 @@ type Extracted = {
 };
 
 type TextToken = { text: string; x: number; y: number };
+
+type Props = {
+  projectId: string;
+  revisionId: string;
+  url: string | null;
+  pageNumber: number;
+  registeredSheetNumber: string;
+  registeredRevision: string;
+  registeredSheetTitle: string | null;
+};
 
 const PDF_WORKER_SRC = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
 
@@ -48,11 +60,17 @@ function infer(lines: string[]) {
   return { sheetNumber: labeledSheet ?? genericSheet, revision, sheetTitle: titleCandidates[0] ?? null };
 }
 
-export default function PdfTextInspector({ url, pageNumber }: { url: string | null; pageNumber: number }) {
+export default function PdfTextInspector({ projectId, revisionId, url, pageNumber, registeredSheetNumber, registeredRevision, registeredSheetTitle }: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<Extracted | null>(null);
   const [state, setState] = useState<"IDLE" | "LOADING" | "READY" | "ERROR">("IDLE");
   const [error, setError] = useState<string | null>(null);
+  const [sheetNumber, setSheetNumber] = useState(registeredSheetNumber);
+  const [revision, setRevision] = useState(registeredRevision);
+  const [sheetTitle, setSheetTitle] = useState(registeredSheetTitle ?? "");
   const candidates = useMemo(() => result ? [result.sheetNumber, result.revision, result.sheetTitle].filter(Boolean).length : 0, [result]);
+  const mismatchCount = result ? Number(!!result.sheetNumber && normalizeLine(result.sheetNumber).toLowerCase() !== normalizeLine(registeredSheetNumber).toLowerCase()) + Number(!!result.revision && normalizeLine(result.revision).toLowerCase() !== normalizeLine(registeredRevision).toLowerCase()) + Number(!!result.sheetTitle && normalizeLine(result.sheetTitle).toLowerCase() !== normalizeLine(registeredSheetTitle ?? "").toLowerCase()) : 0;
 
   async function extract() {
     if (!url) return;
@@ -76,7 +94,11 @@ export default function PdfTextInspector({ url, pageNumber }: { url: string | nu
       const titleBlockTokens = tokens.filter((token) => token.x >= viewport.width * 0.45 && token.y <= viewport.height * 0.38);
       const titleBlockText = groupLines(titleBlockTokens);
       const inferred = infer(titleBlockText.length ? titleBlockText : fullText);
-      setResult({ ...inferred, titleBlockText, fullText, pageWidth: viewport.width, pageHeight: viewport.height });
+      const next = { ...inferred, titleBlockText, fullText, pageWidth: viewport.width, pageHeight: viewport.height };
+      setResult(next);
+      if (next.sheetNumber) setSheetNumber(next.sheetNumber);
+      if (next.revision) setRevision(next.revision);
+      if (next.sheetTitle) setSheetTitle(next.sheetTitle);
       setState("READY");
       await task.destroy();
     } catch (e) {
@@ -85,24 +107,40 @@ export default function PdfTextInspector({ url, pageNumber }: { url: string | nu
     }
   }
 
+  function applyReviewedMetadata() {
+    setError(null);
+    startTransition(() => {
+      saveExtractedDrawingMetadataAction(projectId, revisionId, { sheetNumber, revision, sheetTitle })
+        .then(() => router.refresh())
+        .catch((e) => setError(e instanceof Error ? e.message : "Unable to save reviewed drawing metadata."));
+    });
+  }
+
   if (!url) return <div className="border border-[#1C3A57] p-3 text-xs text-[#6D8AA0]">No controlled PDF URL is available for text intelligence.</div>;
 
   return <div className="border border-[#1C3A57] bg-[#0B1F32] p-3 text-xs">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <div><div className="font-semibold text-[#DCEBF5]">PDF text intelligence</div><div className="cat mt-1">Reads embedded PDF text only. No OCR, no server proxy, no image guessing.</div></div>
+      <div><div className="font-semibold text-[#DCEBF5]">PDF text intelligence</div><div className="cat mt-1">Reads embedded PDF text only. No OCR, no server proxy, no image guessing. Metadata changes require explicit review.</div></div>
       <button type="button" className="btn-secondary min-h-11" disabled={state === "LOADING"} onClick={extract}>{state === "LOADING" ? "Extracting…" : result ? "Re-extract" : "Extract title block"}</button>
     </div>
     {error && <div className="mt-2 border border-[#6A2C2C] bg-[#1A0C0C] p-2 text-[#F0A0A0]">{error}</div>}
     {result && <div className="mt-3 space-y-3">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         <div className="border border-[#1C3A57] p-2"><div className="cat">Sheet candidate</div><div className="mt-1 font-mono text-[#DCEBF5]">{result.sheetNumber || "—"}</div></div>
         <div className="border border-[#1C3A57] p-2"><div className="cat">Revision candidate</div><div className="mt-1 font-mono text-[#DCEBF5]">{result.revision || "—"}</div></div>
         <div className="border border-[#1C3A57] p-2"><div className="cat">Candidates</div><div className="mt-1 font-mono text-[#6FD6C9]">{candidates}/3</div></div>
+        <div className={`border p-2 ${mismatchCount ? "border-[#6A5521]" : "border-[#1C3A57]"}`}><div className="cat">Registered mismatch</div><div className={`mt-1 font-mono ${mismatchCount ? "text-[#F0D98A]" : "text-[#6FD6C9]"}`}>{mismatchCount}</div></div>
       </div>
       <div className="border border-[#1C3A57] p-2"><div className="cat">Title candidate</div><div className="mt-1 text-[#DCEBF5]">{result.sheetTitle || "No reliable title candidate detected"}</div></div>
+      <div className="grid gap-2 md:grid-cols-3">
+        <label><span className="cat">Reviewed sheet number</span><input className="mt-1 w-full min-h-11" value={sheetNumber} onChange={(e) => setSheetNumber(e.target.value)} /></label>
+        <label><span className="cat">Reviewed revision</span><input className="mt-1 w-full min-h-11" value={revision} onChange={(e) => setRevision(e.target.value)} /></label>
+        <label><span className="cat">Reviewed sheet title</span><input className="mt-1 w-full min-h-11" value={sheetTitle} onChange={(e) => setSheetTitle(e.target.value)} /></label>
+      </div>
+      <button type="button" className="btn min-h-11" disabled={pending || !sheetNumber.trim() || !revision.trim()} onClick={applyReviewedMetadata}>{pending ? "Applying…" : "Apply reviewed metadata"}</button>
       <details><summary className="cursor-pointer text-[#6FD6C9]">Title-block zone text ({result.titleBlockText.length} lines)</summary><pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap border border-[#1C3A57] p-2 text-[10px] text-[#9CB2C2]">{result.titleBlockText.join("\n") || "No embedded text detected in the lower-right title-block zone."}</pre></details>
       <details><summary className="cursor-pointer text-[#6FD6C9]">Full page embedded text ({result.fullText.length} lines)</summary><pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap border border-[#1C3A57] p-2 text-[10px] text-[#9CB2C2]">{result.fullText.join("\n")}</pre></details>
-      <div className="cat">Page {pageNumber} · {Math.round(result.pageWidth)}×{Math.round(result.pageHeight)} PDF units · client-side PDF.js extraction</div>
+      <div className="cat">Page {pageNumber} · {Math.round(result.pageWidth)}×{Math.round(result.pageHeight)} PDF units · client-side PDF.js extraction · reviewed writes are audited</div>
     </div>}
   </div>;
 }
